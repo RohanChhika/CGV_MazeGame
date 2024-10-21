@@ -386,7 +386,43 @@
     
             // Position the camera near the vendor
             camera.position.set(0, 2, 5); 
+            
+// Set up the audio listener and load the background music
+const listener = new THREE.AudioListener();
+camera.add(listener);
+
+// Load background music
+const sound = new THREE.Audio(listener);
+const audioLoader = new THREE.AudioLoader();
+
+        // Load the audio file but don't play it yet
+        audioLoader.load('background.mp3', function(buffer) {
+            sound.setBuffer(buffer);
+            sound.setLoop(true);  // Set to loop
+            sound.setVolume(0.5); // Set volume
+            console.log("Audio loaded, waiting for user interaction to start playing.");
+            
+            // Add a click event listener to play the sound on user interaction
+            document.body.addEventListener('click', function() {
+                // Resume the AudioContext if needed
+                if (THREE.AudioContext.getContext().state === 'suspended') {
+                    THREE.AudioContext.getContext().resume().then(() => {
+                        console.log("AudioContext resumed and music started.");
+                        sound.play(); // Play the music after user interaction
+                    });
+                } else {
+                    sound.play();  // If already resumed, just play the music
+                }
+            }, { once: true });  // Ensure the music only starts once
+        },
+        function(xhr) {
+            console.log((xhr.loaded / xhr.total * 100) + '% music loaded');
+        },
+        function(error) {
+            console.error('An error occurred while loading the audio file:', error);
+        });
         }
+        
         let spotlight;
         function setupLighting() {
             // Set up ambient light
@@ -458,9 +494,35 @@
 
             if (mazeNumber === mazeOne) {
                 trapPositions = [
-                    { x: 13, z: 10 },  // Positions for Maze One
-                    { x: 25, z: 15 },
+                    { x: 14, z: 10 },
+                    { x: 16, z: 10 }, 
+                    { x: 12, z: 10 },
+                    { x: 10, z: 10 }, 
+                    { x: 12, z: 12 },
+                    { x: 14, z: 12 },
+                    { x: 16, z: 12 },
+                    { x: 10, z: 12 }, // Positions for Maze One
+                    
+                    { x: 25, z: 16 },
+                    { x: 25, z: 14 },
+                    { x: 25, z: 12 },
+                    { x: 25, z: 10 },
+
+                    { x: 27, z: 16 },
+                    { x: 27, z: 14 },
+                    { x: 27, z: 12 },
+                    { x: 27, z: 10 },
+                     
+                    
+                    { x: 35, z: 18 },
                     { x: 35, z: 20 },
+                    { x: 35, z: 22 },
+                    { x: 35, z: 24 },
+                    
+                    { x: 33, z: 18 },
+                    { x: 33, z: 20 },
+                    { x: 33, z: 22 },
+                    { x: 33, z: 24 },
                 ];
             } else if (mazeNumber === mazeTwo) {
                 trapPositions = [
