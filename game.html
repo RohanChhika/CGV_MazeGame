@@ -1,0 +1,1353 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>3D Maze Game with Custom Character Model and Vendor</title>
+        <style>
+            body { 
+                margin: 0; 
+                font-family: Arial, sans-serif; 
+                overflow: hidden; 
+            }
+            canvas { 
+                display: block; 
+            }
+            #info { 
+                position: absolute; 
+                top: 10px; 
+                left: 10px; 
+                color: white; 
+                background: rgba(0,0,0,0.5); 
+                padding: 10px; 
+            }
+            #vendorMenu, #riddleMenu, #powerUpMenu {
+                display: none;
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgb(0, 0, 0);
+                color: white;
+                padding: 20px;
+                border-radius: 10px;
+            }
+            
+            button {
+                margin: 5px;
+                padding: 5px 10px;
+                cursor: pointer;
+            }
+            input {
+                margin: 5px;
+                padding: 5px;
+            }
+            #interactionMessage{
+                display: none;
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%);
+                color: white; 
+                background: rgba(0, 0, 0, 0.7); 
+                padding: 10px; 
+                border-radius: 5px;
+            }
+            #backToMenu { 
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                padding: 5px 10px;
+                background-color: #8d6e63;
+                color: white;
+                border: none;
+                cursor: pointer;
+                z-index: 1000;
+            }
+        </style>
+    </head>
+
+    <body>
+        <div id="info">
+            Health: <span id="health">100</span><br>
+    
+            <!-- Vendor and Coins -->
+            Coins: <span id="coins">0</span><br>
+            Press 1 for First Person View, 3 for Third Person View<br>
+        </div>
+    
+        <div id = "interactionMessage">
+            Press E to interact with the vendor
+        </div>
+    
+        <div id="vendorMenu">
+            <!-- Vendor Menu -->
+            <h2>Vendor Interaction</h2>
+            <p>You can either answer the riddle for coins or buy power-ups.</p>
+            <button onclick="showRiddleMenu()">Answer the Riddle</button>
+            <button onclick="showPowerUpMenu()">Buy Power-ups</button>
+    
+            <button onclick="closeVendorMenu()">Close</button>
+        </div>
+    
+        <div id="riddleMenu">
+            <h2>Riddle Challenge</h2>
+            <p id="riddleQuestion"></p>
+            <input type="text" id="riddleAnswer" placeholder="Your answer">
+            <button onclick="submitRiddleAnswer()">Submit Answer</button>
+            <button onclick="closeRiddleMenu()">Cancel</button>
+        </div>
+    
+        <div id="powerUpMenu">
+            <h2>Buy Power-ups</h2>
+            <button onclick="buyPowerUp('superSpeed')">Buy Super Speed (10 coins)</button>
+            <button onclick="buyPowerUp('healthBoost')">Buy Health Boost (15 coins)</button>
+            <button onclick="buyPowerUp('superJump')">Buy Super Jump(20 coins)</button>
+            <button onclick="buyPowerUp('Invincibility')">Buy Invincibility(10 coins)</buton>
+            <button onclick="closePowerUpMenu()">Close</button>
+        </div>
+
+        <script type="importmap">
+            {
+                "imports": {
+                    "three": "https://unpkg.com/three@0.157.0/build/three.module.js",
+                    "three/examples/jsm/controls/PointerLockControls.js": "https://unpkg.com/three@0.157.0/examples/jsm/controls/PointerLockControls.js",
+                    "three/examples/jsm/loaders/GLTFLoader.js": "https://unpkg.com/three@0.157.0/examples/jsm/loaders/GLTFLoader.js"
+                }
+            }
+        </script>
+
+        <script>
+            // This script tag should be placed before your module script
+            function backToMenu() {
+                window.location.href = 'index.html';
+            }
+        </script>
+
+        <button id="backToMenu">Back to Menu</button>
+        <script type="module">
+            let isPaused = false;
+            const pauseMenu = document.createElement('div');
+            import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.module.js';
+            import { PointerLockControls } from 'https://cdn.jsdelivr.net/npm/three@0.157.0/examples/jsm/controls/PointerLockControls.js';
+            import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.157.0/examples/jsm/loaders/GLTFLoader.js';
+            import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.18.0/dist/cannon-es.js";
+
+            // Constants
+            const BOUNDARY_SIZE = 200;  // Updated boundary size
+            const CHARACTER_HEIGHT = 2.5;
+            const EYE_LEVEL = CHARACTER_HEIGHT * 1.1;
+            const FIRST_PERSON_OFFSET = new THREE.Vector3(0, EYE_LEVEL, 0);
+            const THIRD_PERSON_OFFSET = new THREE.Vector3(0, 2, -5);  // 2 units above, 5 units behind the character
+            const MOVEMENT_SPEED = 5.0;
+            const VENDOR_INTERACTION_DISTANCE = 5;
+            const gravity = -0.1;  // Gravity strength (negative pulls character down)
+            const vendors = [];
+            let animationFrameId;
+            // Variables
+            let scene, camera, renderer, controls, ground, character, mixer, vendor;
+            let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+            let isFirstPerson = true, isWalking = false, isGrounded = true, topDownViewEnabled = false;
+            let invincible = false;
+            let health = 100, coins = 0, superSpeedActive = false;
+
+            // Character physics variables
+            let jumpVelocity = 0;
+            let jumpStrength = 6;
+            let jumpFullStrength = 30;
+            let characterDirection = new THREE.Vector3(0, 0, 0);
+            let cameraOffset = new THREE.Vector3();
+
+            const traps = [];
+            let lastDamageTime = 0;
+            const damageCooldown = 1000; // 1 second cooldown between damage applications
+            const ANIMATION_DURATION = 110; // Total frames of the animation
+            const SPIKES_START_RISING = 30;
+            const SPIKES_FULLY_UP = 30;
+            const SPIKES_START_LOWERING = 70;
+            const SPIKES_FULLY_DOWN = 80;
+            
+            // Textures
+            const mazeOneFloor = new THREE.TextureLoader().load('./assets/mazeOne.png');
+            const mazeOneWall = new THREE.TextureLoader().load('./assets/mazeOne.png'); 
+            const mazeTwoFloor = new THREE.TextureLoader().load('./assets/mazeTwo.jpg');
+            const mazeTwoWall = new THREE.TextureLoader().load('./assets/mazeTwo.jpg'); 
+            const mazeThreeFloor = new THREE.TextureLoader().load('./assets/mazeThree.jpg');
+            const mazeThreeWall = new THREE.TextureLoader().load('./assets/mazeThree.jpg');
+
+
+            // Character dimensions and camera offsets
+            const characterHeight = 2;
+            const eyeLevel = characterHeight * 1.1;
+            const firstPersonOffset = new THREE.Vector3(0, eyeLevel, 0);
+            const thirdPersonOffset = new THREE.Vector3(0, 2, -5); // 2 units above, 5 units behind the character
+
+            // Timing and movement helpers
+            const velocity = new THREE.Vector3();
+            const direction = new THREE.Vector3();
+            const clock = new THREE.Clock();
+            let prevTime = performance.now();
+
+            // Gameplay elements
+            const coinObjects = [];  // Store coin objects
+            let playerBody;  // Placeholder for physics
+
+            // UI Elements
+            const healthElement = document.getElementById('health');
+            const coinsElement = document.getElementById('coins');
+            const vendorMenu = document.getElementById('vendorMenu');
+            const powerUpMenu = document.getElementById('powerUpMenu');
+            const riddleMenu = document.getElementById('riddleMenu');
+            const interactionMessage = document.getElementById('interactionMessage');
+            let currentRiddle = null;
+
+            // Set up Cannon.js world
+            const world = new CANNON.World();
+            world.gravity.set(0, -9.82, 0);
+            
+            // Create character in physics world
+            const characterRadius = 1; // Adjust radius as needed
+            const characterShape = new CANNON.Cylinder(characterRadius, characterRadius, characterHeight, 8);
+
+            const characterBody = new CANNON.Body({
+                mass: 5, // Set the mass
+                shape: characterShape,
+                position: new CANNON.Vec3(20, characterHeight/2, 3) // Starting position
+            });
+            characterBody.angularFactor.set(0, 1, 0);  // Only allow rotation along the Y axis
+
+            world.addBody(characterBody);
+
+            const mazeOne = [
+                { type: 'line', x1: 1.0, y1: 1.0, x2: 17.0, y2: 1.0 },
+                { type: 'line', x1: 25.0, y1: 1.0, x2: 49.0, y2: 1.0 },
+                { type: 'line', x1: 1.0, y1: 9.0, x2: 9.0, y2: 9.0 },
+                { type: 'line', x1: 17.0, y1: 9.0, x2: 25.0, y2: 9.0 },
+                { type: 'line', x1: 33.0, y1: 9.0, x2: 49.0, y2: 9.0 },
+                { type: 'line', x1: 25.0, y1: 17.0, x2: 41.0, y2: 17.0 },
+                { type: 'line', x1: 1.0, y1: 25.0, x2: 9.0, y2: 25.0 },
+                { type: 'line', x1: 9.0, y1: 33.0, x2: 17.0, y2: 33.0 },
+                { type: 'line', x1: 41.0, y1: 33.0, x2: 49.0, y2: 33.0 },
+                { type: 'line', x1: 9.0, y1: 41.0, x2: 25.0, y2: 41.0 },
+                { type: 'line', x1: 33.0, y1: 41.0, x2: 41.0, y2: 41.0 },
+                { type: 'line', x1: 1.0, y1: 49.0, x2: 25.0, y2: 49.0 },
+                { type: 'line', x1: 33.0, y1: 49.0, x2: 49.0, y2: 49.0 },
+                { type: 'line', x1: 1.0, y1: 1.0, x2: 1.0, y2: 49.0 },
+                { type: 'line', x1: 9.0, y1: 17.0, x2: 9.0, y2: 25.0 },
+                { type: 'line', x1: 17.0, y1: 9.0, x2: 17.0, y2: 33.0 },
+                { type: 'line', x1: 25.0, y1: 1.0, x2: 25.0, y2: 9.0 },
+                { type: 'line', x1: 25.0, y1: 17.0, x2: 25.0, y2: 49.0 },
+                { type: 'line', x1: 33.0, y1: 25.0, x2: 33.0, y2: 49.0 },
+                { type: 'line', x1: 41.0, y1: 25.0, x2: 41.0, y2: 33.0 },
+                { type: 'line', x1: 49.0, y1: 1.0, x2: 49.0, y2: 49.0 }
+            ];
+
+
+
+            const mazeTwo = [
+                { type: 'line', x1: 1.0, y1: 1.0, x2: 25.0, y2: 1.0 },
+                { type: 'line', x1: 33.0, y1: 1.0, x2: 65.0, y2: 1.0 },
+                { type: 'line', x1: 25.0, y1: 9.0, x2: 33.0, y2: 9.0 },
+                { type: 'line', x1: 41.0, y1: 9.0, x2: 57.0, y2: 9.0 },
+                { type: 'line', x1: 17.0, y1: 17.0, x2: 25.0, y2: 17.0 },
+                { type: 'line', x1: 41.0, y1: 17.0, x2: 65.0, y2: 17.0 },
+                { type: 'line', x1: 1.0, y1: 25.0, x2: 17.0, y2: 25.0 },
+                { type: 'line', x1: 9.0, y1: 33.0, x2: 33.0, y2: 33.0 },
+                { type: 'line', x1: 49.0, y1: 33.0, x2: 57.0, y2: 33.0 },
+                { type: 'line', x1: 17.0, y1: 41.0, x2: 57.0, y2: 41.0 },
+                { type: 'line', x1: 1.0, y1: 49.0, x2: 9.0, y2: 49.0 },
+                { type: 'line', x1: 25.0, y1: 49.0, x2: 33.0, y2: 49.0 },
+                { type: 'line', x1: 41.0, y1: 49.0, x2: 49.0, y2: 49.0 },
+                { type: 'line', x1: 57.0, y1: 49.0, x2: 65.0, y2: 49.0 },
+                { type: 'line', x1: 9.0, y1: 57.0, x2: 17.0, y2: 57.0 },
+                { type: 'line', x1: 25.0, y1: 57.0, x2: 41.0, y2: 57.0 },
+                { type: 'line', x1: 1.0, y1: 65.0, x2: 33.0, y2: 65.0 },
+                { type: 'line', x1: 41.0, y1: 65.0, x2: 65.0, y2: 65.0 },
+                { type: 'line', x1: 1.0, y1: 1.0, x2: 1.0, y2: 65.0 },
+                { type: 'line', x1: 9.0, y1: 9.0, x2: 9.0, y2: 25.0 },
+                { type: 'line', x1: 9.0, y1: 33.0, x2: 9.0, y2: 41.0 },
+                { type: 'line', x1: 17.0, y1: 1.0, x2: 17.0, y2: 17.0 },
+                { type: 'line', x1: 17.0, y1: 41.0, x2: 17.0, y2: 65.0 },
+                { type: 'line', x1: 25.0, y1: 17.0, x2: 25.0, y2: 33.0 },
+                { type: 'line', x1: 25.0, y1: 49.0, x2: 25.0, y2: 57.0 },
+                { type: 'line', x1: 33.0, y1: 1.0, x2: 33.0, y2: 25.0 },
+                { type: 'line', x1: 41.0, y1: 9.0, x2: 41.0, y2: 17.0 },
+                { type: 'line', x1: 41.0, y1: 25.0, x2: 41.0, y2: 41.0 },
+                { type: 'line', x1: 41.0, y1: 49.0, x2: 41.0, y2: 65.0 },
+                { type: 'line', x1: 49.0, y1: 17.0, x2: 49.0, y2: 25.0 },
+                { type: 'line', x1: 49.0, y1: 57.0, x2: 49.0, y2: 65.0 },
+                { type: 'line', x1: 57.0, y1: 25.0, x2: 57.0, y2: 41.0 },
+                { type: 'line', x1: 57.0, y1: 49.0, x2: 57.0, y2: 57.0 },
+                { type: 'line', x1: 65.0, y1: 1.0, x2: 65.0, y2: 65.0 }
+            ];
+
+
+
+            const mazeThree = [
+    { type: 'line', x1: 1.0, y1: 1.0, x2: 41.0, y2: 1.0 },
+    { type: 'line', x1: 49.0, y1: 1.0, x2: 89.0, y2: 1.0 },
+    { type: 'line', x1: 9.0, y1: 9.0, x2: 25.0, y2: 9.0 },
+    { type: 'line', x1: 33.0, y1: 9.0, x2: 41.0, y2: 9.0 },
+    { type: 'line', x1: 57.0, y1: 9.0, x2: 65.0, y2: 9.0 },
+    { type: 'line', x1: 73.0, y1: 9.0, x2: 81.0, y2: 9.0 },
+    { type: 'line', x1: 9.0, y1: 17.0, x2: 57.0, y2: 17.0 },
+    { type: 'line', x1: 65.0, y1: 17.0, x2: 73.0, y2: 17.0 },
+    { type: 'line', x1: 49.0, y1: 25.0, x2: 57.0, y2: 25.0 },
+    { type: 'line', x1: 73.0, y1: 25.0, x2: 81.0, y2: 25.0 },
+    { type: 'line', x1: 1.0, y1: 33.0, x2: 17.0, y2: 33.0 },
+    { type: 'line', x1: 33.0, y1: 33.0, x2: 65.0, y2: 33.0 },
+    { type: 'line', x1: 73.0, y1: 33.0, x2: 89.0, y2: 33.0 },
+    { type: 'line', x1: 9.0, y1: 41.0, x2: 17.0, y2: 41.0 },
+    { type: 'line', x1: 25.0, y1: 41.0, x2: 33.0, y2: 41.0 },
+    { type: 'line', x1: 41.0, y1: 41.0, x2: 81.0, y2: 41.0 },
+    { type: 'line', x1: 25.0, y1: 49.0, x2: 41.0, y2: 49.0 },
+    { type: 'line', x1: 49.0, y1: 49.0, x2: 65.0, y2: 49.0 },
+    { type: 'line', x1: 73.0, y1: 49.0, x2: 81.0, y2: 49.0 },
+    { type: 'line', x1: 57.0, y1: 57.0, x2: 73.0, y2: 57.0 },
+    { type: 'line', x1: 81.0, y1: 57.0, x2: 89.0, y2: 57.0 },
+    { type: 'line', x1: 1.0, y1: 65.0, x2: 17.0, y2: 65.0 },
+    { type: 'line', x1: 33.0, y1: 65.0, x2: 57.0, y2: 65.0 },
+    { type: 'line', x1: 73.0, y1: 65.0, x2: 81.0, y2: 65.0 },
+    { type: 'line', x1: 9.0, y1: 73.0, x2: 25.0, y2: 73.0 },
+    { type: 'line', x1: 57.0, y1: 73.0, x2: 65.0, y2: 73.0 },
+    { type: 'line', x1: 33.0, y1: 81.0, x2: 73.0, y2: 81.0 },
+    { type: 'line', x1: 1.0, y1: 89.0, x2: 41.0, y2: 89.0 },
+    { type: 'line', x1: 49.0, y1: 89.0, x2: 89.0, y2: 89.0 },
+    { type: 'line', x1: 1.0, y1: 1.0, x2: 1.0, y2: 89.0 },
+    { type: 'line', x1: 9.0, y1: 9.0, x2: 9.0, y2: 25.0 },
+    { type: 'line', x1: 9.0, y1: 41.0, x2: 9.0, y2: 57.0 },
+    { type: 'line', x1: 9.0, y1: 81.0, x2: 9.0, y2: 89.0 },
+    { type: 'line', x1: 17.0, y1: 25.0, x2: 17.0, y2: 41.0 },
+    { type: 'line', x1: 17.0, y1: 49.0, x2: 17.0, y2: 65.0 },
+    { type: 'line', x1: 17.0, y1: 73.0, x2: 17.0, y2: 81.0 },
+    { type: 'line', x1: 25.0, y1: 17.0, x2: 25.0, y2: 41.0 },
+    { type: 'line', x1: 25.0, y1: 49.0, x2: 25.0, y2: 89.0 },
+    { type: 'line', x1: 33.0, y1: 9.0, x2: 33.0, y2: 17.0 },
+    { type: 'line', x1: 33.0, y1: 25.0, x2: 33.0, y2: 41.0 },
+    { type: 'line', x1: 33.0, y1: 57.0, x2: 33.0, y2: 81.0 },
+    { type: 'line', x1: 41.0, y1: 25.0, x2: 41.0, y2: 33.0 },
+    { type: 'line', x1: 41.0, y1: 41.0, x2: 41.0, y2: 57.0 },
+    { type: 'line', x1: 41.0, y1: 73.0, x2: 41.0, y2: 81.0 },
+    { type: 'line', x1: 49.0, y1: 1.0, x2: 49.0, y2: 17.0 },
+    { type: 'line', x1: 49.0, y1: 49.0, x2: 49.0, y2: 73.0 },
+    { type: 'line', x1: 49.0, y1: 81.0, x2: 49.0, y2: 89.0 },
+    { type: 'line', x1: 57.0, y1: 17.0, x2: 57.0, y2: 25.0 },
+    { type: 'line', x1: 65.0, y1: 9.0, x2: 65.0, y2: 33.0 },
+    { type: 'line', x1: 65.0, y1: 57.0, x2: 65.0, y2: 73.0 },
+    { type: 'line', x1: 73.0, y1: 1.0, x2: 73.0, y2: 9.0 },
+    { type: 'line', x1: 73.0, y1: 41.0, x2: 73.0, y2: 57.0 },
+    { type: 'line', x1: 73.0, y1: 65.0, x2: 73.0, y2: 81.0 },
+    { type: 'line', x1: 81.0, y1: 9.0, x2: 81.0, y2: 25.0 },
+    { type: 'line', x1: 81.0, y1: 73.0, x2: 81.0, y2: 89.0 },
+    { type: 'line', x1: 89.0, y1: 1.0, x2: 89.0, y2: 89.0 }
+];
+
+
+
+        const mockRiddles = [
+            {
+                question: "I speak without a mouth and hear without ears. I have no body, but I come alive with wind. What am I?",
+                answer: "echo"
+            },
+            {
+                question: "What has keys, but no locks; space, but no room; you can enter, but not go in?",
+                answer: "keyboard"
+            },
+            {
+                question: "I have cities, but no houses. I have mountains, but no trees. I have water, but no fish. What am I?",
+                answer: "map"
+            },
+            {
+                question: "What gets wet while drying?",
+                answer: "towel"
+            },
+            {
+                question: "The more you take, the more you leave behind. What am I?",
+                answer: "footsteps"
+            }
+        ];
+
+        function setupScene() {
+            scene = new THREE.Scene();
+    
+            // Set up the camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    
+            // Set up the renderer with shadow map and tone mapping
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true; // Enable shadows
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Softer shadows
+            renderer.toneMapping = THREE.ACESFilmicToneMapping; // Use ACES filmic tone mapping
+            renderer.toneMappingExposure = 1; // Adjust tone mapping exposure
+    
+            // Append renderer to the DOM
+            document.body.appendChild(renderer.domElement);
+    
+            // Position the camera near the vendor
+            camera.position.set(0, 2, 5); 
+        }
+        let spotlight;
+        function setupLighting() {
+            // Set up ambient light
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.05); // Lower intensity ambient light
+            scene.add(ambientLight);
+            
+            //flashlight as a spotlight attached to the camera
+            spotlight=new THREE.SpotLight(0xffffff, 3, 100, Math.PI / 6, 0.3, 1);
+            spotlight.position.set(0, 0, 0); // Start from the camera's position
+            spotlight.castShadow = true; // Enable shadows
+            spotlight.shadow.mapSize.width = 2048; // Shadow map resolution
+            spotlight.shadow.mapSize.height = 2048;
+            
+            // Add a target to make the spotlight follow the camera direction
+            scene.add(spotlight);  // Add the spotlight to the scene
+            spotlight.target = new THREE.Object3D();
+            scene.add(spotlight.target);
+
+            // Set up directional light with shadows
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5); // Directional light
+            directionalLight.position.set(10, 20, 10); // Adjust position
+            directionalLight.castShadow = true; // Enable shadows
+
+            // Configure the shadow quality for the directional light
+            // directionalLight.shadow.mapSize.width = 1024; // Shadow map resolution (quality)
+            // directionalLight.shadow.mapSize.height = 1024;
+            // directionalLight.shadow.camera.left = -50;
+            // directionalLight.shadow.camera.right = 50;
+            // directionalLight.shadow.camera.top = 50;
+            // directionalLight.shadow.camera.bottom = -50;
+            // directionalLight.shadow.camera.near = 1;
+            // directionalLight.shadow.camera.far = 100;
+          //  scene.add(directionalLight);
+
+            // Add point light for additional lighting effect
+            const pointLight = new THREE.PointLight(0xffaa00, 1, 50); // Point light with yellow tint
+            pointLight.position.set(10, 10, 10); // Set position
+            scene.add(pointLight);
+        }
+
+        function createGround(X_Max,Z_Max) {
+            const groundGeometry = new THREE.PlaneGeometry(X_Max, Z_Max);
+            let groundMaterial;
+            if (mazeLevel == mazeOne){
+                groundMaterial = new THREE.MeshStandardMaterial({ map: mazeOneFloor  });
+            } else if (mazeLevel == mazeTwo){
+                groundMaterial = new THREE.MeshStandardMaterial({ map: mazeTwoFloor  });
+            } else {
+                groundMaterial = new THREE.MeshStandardMaterial({color: 0x808080});
+            }
+            ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow=true;
+            scene.add(ground);
+
+            ground.position.set(X_Max / 2, 0, Z_Max / 2);
+            scene.add(ground);
+            // Create ground in Cannon.js
+            const groundShape = new CANNON.Plane();
+            const groundBody = new CANNON.Body({ mass: 0 });
+            groundBody.addShape(groundShape);
+            groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+            groundBody.position.set(X_Max / 2, 0, Z_Max / 2);
+            world.addBody(groundBody);
+
+        }
+        function createTraps(mazeNumber) {
+            let trapPositions;
+
+            if (mazeNumber === mazeOne) {
+                trapPositions = [
+                    { x: 13, z: 10 },  // Positions for Maze One
+                    { x: 25, z: 15 },
+                    { x: 35, z: 20 },
+                ];
+            } else if (mazeNumber === mazeTwo) {
+                trapPositions = [
+                    { x: 45, z: 50 },  // Positions for Maze Two
+                    { x: 55, z: 45 },
+                    { x: 65, z: 55 },
+                ];
+            } else {
+                trapPositions = [
+                    { x: 95, z: 100 }, // Positions for Maze Three
+                    { x: 80, z: 90 },
+                    { x: 75, z: 85 },
+                ];
+            }
+
+            // Clear any existing traps before adding new ones for the current maze
+            traps.forEach(trap => {
+                scene.remove(trap.model);
+            });
+            traps.length = 0;
+
+            // Load traps for the specified maze
+            trapPositions.forEach(position => {
+                const loader = new GLTFLoader();
+                loader.load(
+                    'trap.glb',
+                    function (gltf) {
+                        const trapModel = gltf.scene;
+                        trapModel.position.set(position.x, 0.2, position.z);
+                        trapModel.scale.set(0.2, 0.2, 0.2);
+
+                        if (gltf.animations && gltf.animations.length) {
+                            const trapMixer = new THREE.AnimationMixer(trapModel);
+                            const spikeAction = trapMixer.clipAction(gltf.animations[0]);
+                            spikeAction.setLoop(THREE.LoopRepeat);
+                            spikeAction.play();
+
+                            traps.push({
+                                model: trapModel,
+                                mixer: trapMixer,
+                                spikeAction: spikeAction,
+                                isSpikesUp: false,
+                                previousState: false,
+                                animationTime: 0
+                            });
+                        }
+
+                        scene.add(trapModel);
+                    },
+                    function (xhr) {
+                        console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+                    },
+                    function (error) {
+                        console.error('An error occurred while loading the trap', error);
+                    }
+                );
+            });
+        }
+
+        characterBody.addEventListener("collide", function(e) {
+            // Collision detected, you can handle the collision here
+            console.log("Collision with", e.body);  // e.body is the object the character collided with
+        });
+
+
+        function loadCharacterModel() {
+            const loader = new GLTFLoader();
+            loader.load(
+                'player2.glb',
+                function (gltf) {
+                    character = gltf.scene;
+                    character.traverse((node)=>{
+                        if (node.isMesh){
+                            node.castShadow=true;   
+                        }
+                    })
+                    character.position.copy(characterBody.position);
+                    scene.add(character);
+                    characterBody.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), Math.PI);  // Rotate by 180 degrees
+                    character.scale.set(1, 1, 1); // Adjust these values as needed
+                    character.castShadow=true;
+                    setupControls();
+                    animate(); // Start animation loop after controls are set up
+                },
+                function (xhr) {
+                    console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+                },
+                function (error) {
+                    console.error('An error happened', error);
+                }
+            );
+        }
+        function setupControls() {
+            controls = new PointerLockControls(camera, document.body);
+            scene.add(controls.getObject());
+
+            document.addEventListener('click', () => {
+                controls.lock();
+                console.log("Pointer locked"); // Add a log to confirm when pointer lock is engaged
+            });
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+
+            updateCameraPosition();
+        }
+
+        function updateCharacterMovement(delta) {
+    const moveSpeed = superSpeedActive ? MOVEMENT_SPEED * 2 : MOVEMENT_SPEED;
+    const velocity = new CANNON.Vec3();
+
+    let forward = 0, right = 0;
+    if (moveForward) forward += 1;
+    if (moveBackward) forward -= 1;
+    if (moveLeft) right -= 1;
+    if (moveRight) right += 1;
+
+    // Get character's forward and right direction
+    const cameraDirection = new THREE.Vector3();
+    camera.getWorldDirection(cameraDirection);
+    cameraDirection.y = 0;
+    cameraDirection.normalize();
+    const sideways = new THREE.Vector3(-cameraDirection.z, 0, cameraDirection.x);
+
+    // Apply velocity based on the movement directions
+    velocity.x = (forward * cameraDirection.x + right * sideways.x) * moveSpeed;
+    velocity.z = (forward * cameraDirection.z + right * sideways.z) * moveSpeed;
+
+    // Update the physics engine
+    characterBody.velocity.x = velocity.x;
+    characterBody.velocity.z = velocity.z;
+
+    // Rotate character to face movement direction
+    if (velocity.x !== 0 || velocity.z !== 0) {
+        const angle = Math.atan2(velocity.x, velocity.z);
+        characterBody.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), angle);
+    }
+}
+
+
+
+
+        function onKeyDown(event) {
+            if (event.code === 'KeyP') {
+            togglePause();
+            return;
+            }
+
+            if (isPaused) return; 
+            switch (event.code) {
+                case 'KeyW': 
+                    moveForward = true; 
+                    playWalkAnimation();  // Start walk animation
+                    break;
+                case 'KeyS': 
+                    moveBackward = true;
+                    playWalkAnimation(); 
+                    break;
+                case 'KeyA': 
+                    moveLeft = true; 
+                    playWalkAnimation();
+                    break;
+                case 'KeyD': 
+                    moveRight = true; 
+                    playWalkAnimation();
+                    break;
+                case 'Space': 
+                    jump();  // Handle jump on Space key
+                    break;
+                case 'Digit1': 
+                    setFirstPersonView();  // Switch to First Person View
+                    break;
+                case 'Digit3': 
+                    setThirdPersonView();  // Switch to Third Person View
+                    break;
+                case 'Digit5': 
+                    toggleTopDownView();  // Toggle Top-Down view
+                    break;
+                case 'KeyE': 
+                    tryInteractWithVendor();  // Interact with vendor
+                    break;
+                default:
+                    console.log(`Unhandled key: ${event.code}`);  // For debugging unhandled keys
+            }
+        }
+
+        function onKeyUp(event) {
+            switch (event.code) {
+                case 'KeyW': 
+                    moveForward = false; 
+                    break;
+                case 'KeyS': 
+                    moveBackward = false; 
+                    break;
+                case 'KeyA': 
+                    moveLeft = false; 
+                    break;
+                case 'KeyD': 
+                    moveRight = false; 
+                    break;
+            }
+
+            // Stop animation if no movement keys are pressed
+            if (!moveForward && !moveBackward && !moveLeft && !moveRight) {
+                stopWalkAnimation();
+            }
+        }
+
+        function setTopDownView() {
+            // Position the camera above the maze, assuming maze boundaries fit within (0, 0) to (boundarySize, boundarySize)
+            const mazeCenterX = 65;  // Adjust as per the center of your maze (based on coordinates)
+            const mazeCenterZ = 65;  // Same for Z axis (if the maze lies on the XZ plane)
+
+            // Position the camera above the maze
+            camera.position.set(mazeCenterX, 160, mazeCenterZ);  // 200 units high above the maze
+
+            // Make the camera point straight down
+            camera.rotation.set(-Math.PI / 2, 0, 0);  // Rotate camera to look downward
+
+            // Ensure the camera updates its matrix
+            camera.updateProjectionMatrix();
+        }
+
+        function toggleTopDownView() {
+            topDownViewEnabled = !topDownViewEnabled;  // Toggle the flag
+
+            if (topDownViewEnabled) {
+                setTopDownView();  // Set the camera for top-down view
+            } else {
+                // Return the camera to the character's view (you may need to define what this means)
+                updateCameraPosition();  // Update the camera to the character's position
+            }
+        }
+
+        function setFirstPersonView() {
+            isFirstPerson = true;
+            updateCameraPosition();
+        }
+
+        function setThirdPersonView() {
+            isFirstPerson = false;
+            updateCameraPosition();
+        }
+
+        function updateCameraPosition() {
+    if (topDownViewEnabled) return;
+
+    if (!character) return;
+
+    const characterPosition = new THREE.Vector3().copy(characterBody.position);
+
+    if (isFirstPerson) {
+        // First Person View
+        camera.position.copy(characterPosition).add(firstPersonOffset);
+        controls.getObject().position.copy(camera.position);
+    } else {
+        // Third Person View
+        const idealOffset = new THREE.Vector3().copy(thirdPersonOffset);
+        const cameraDirection = new THREE.Vector3();
+        camera.getWorldDirection(cameraDirection);
+        cameraDirection.y = 0;
+        cameraDirection.normalize();
+
+        idealOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(cameraDirection.x, cameraDirection.z));
+        camera.position.copy(characterPosition).add(idealOffset);
+        camera.lookAt(characterPosition.clone().add(new THREE.Vector3(0, characterHeight, 0)));
+    }
+}
+
+        function playWalkAnimation() {
+            if (!isWalking && mixer) {
+                const walkAction = mixer.clipAction('Walk'); // Replace 'Walk' with your animation name
+                walkAction.play();
+                isWalking = true; // Set walking state to true
+            }
+        }
+
+        function stopWalkAnimation() {
+            if (isWalking && mixer) {
+                const walkAction = mixer.clipAction('Walk'); // Replace 'Walk' with your animation name
+                walkAction.stop();
+                isWalking = false; // Set walking state to false
+            }
+        }
+        function checkTrapCollisions() {
+            if (!character) return;
+
+            const now = Date.now();
+            traps.forEach(trap => {
+                const distance = character.position.distanceTo(trap.model.position);
+                if (distance < 1.5 && trap.isSpikesUp && now - lastDamageTime > damageCooldown) {
+                    console.log("Damage applied! Spikes are up.");
+                    applyDamage(10);
+                    lastDamageTime = now;
+                }
+            });
+        }
+
+        let mixers = []; // Array to hold all animation mixers
+
+        let lastTime = performance.now();
+function animate() {
+    animationFrameId = requestAnimationFrame(animate);
+    if (isPaused) return;
+    const delta = clock.getDelta();
+    world.step(1 / 60);  // Update the physics at 60fps
+
+    // Update the animation mixer if it exists
+    if (mixer) {
+        mixer.update(delta);
+    }
+
+    // Update trap animations
+    traps.forEach(trap => {
+        trap.mixer.update(delta);
+        trap.animationTime = (trap.animationTime + delta) % (ANIMATION_DURATION / 24);
+        const frame = Math.floor(trap.animationTime * 30);
+        trap.isSpikesUp = frame >= SPIKES_FULLY_UP && frame < SPIKES_START_LOWERING;
+        if (trap.isSpikesUp !== trap.previousState) {
+            console.log(`Frame: ${frame}, Spikes Up: ${trap.isSpikesUp}`);
+            trap.previousState = trap.isSpikesUp;
+        }
+    });
+            // Sync the Three.js character position with the Cannon.js physics body
+        if (controls && controls.isLocked) {
+        updateCharacterMovement(delta);
+
+        // Sync the Three.js character position with the Cannon.js physics body
+        if (character && characterBody) {
+            character.position.copy(characterBody.position);
+            character.quaternion.copy(characterBody.quaternion);
+        }
+
+        checkTrapCollisions();
+        checkForCoins();
+        checkGameStatus(mazeLevel);
+        applyGravity();
+    } else {
+        console.log("Controls are not locked");
+    }
+    //flashlight//
+    // Update the spotlight to point in the direction the camera is looking
+    const cameraDirection = new THREE.Vector3();
+    camera.getWorldDirection(cameraDirection); // Get the camera's direction
+    cameraDirection.normalize();//Normalize to ensure correct length
+    spotlight.target.position.copy(camera.position).add(cameraDirection); // Move the target
+    spotlight.target.updateMatrixWorld();  // Ensure the matrix is updated
+    spotlight.position.copy(camera.position);  // Sync position with camera
+    
+    updateCameraPosition();
+    checkVendorProximity();
+
+    // Update any animations
+    if (mixers.length > 0) {
+        mixers.forEach(mixer => mixer.update(delta));
+    }
+
+    renderer.render(scene, camera);
+}
+
+
+        function applyDamage(amount) {
+            if (invincible) {
+                console.log("Player is invincible. No damage applied.");
+                return;  // Exit the function without applying damage
+            }
+            health = Math.max(0, health - amount);
+            healthElement.textContent = health;
+
+            if (health === 0) {
+                endGame('over')
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        function getSelectedMazeLevel() {
+                const level = localStorage.getItem('selectedMazeLevel');
+                switch (level) {
+                    case 'mazeOne':
+                        return mazeOne;
+                    case 'mazeTwo':
+                        return mazeTwo;
+                    case 'mazeThree':
+                        return mazeThree;
+                    default:
+                        return mazeOne; // Default to easy if no selection is made
+                }
+            }
+        function togglePause() {
+            isPaused = !isPaused;
+            if (isPaused) {
+                pauseMenu.style.display = 'block';
+                controls.unlock();
+            } else {
+                pauseMenu.style.display = 'none';
+                controls.lock();
+            }
+        }
+
+        let mazeLevel = getSelectedMazeLevel();
+        // Init
+        let goalX;
+        let goalZ;
+        function createPauseMenu() {
+            pauseMenu.style.position = 'absolute';
+            pauseMenu.style.top = '50%';
+            pauseMenu.style.left = '50%';
+            pauseMenu.style.transform = 'translate(-50%, -50%)';
+            pauseMenu.style.background = 'rgba(0, 0, 0, 0.7)';
+            pauseMenu.style.padding = '20px';
+            pauseMenu.style.borderRadius = '10px';
+            pauseMenu.style.color = 'white';
+            pauseMenu.style.textAlign = 'center';
+            pauseMenu.style.display = 'none';
+            pauseMenu.innerHTML = `
+                <h2>Game Paused</h2>
+                <button id="resumeButton">Resume</button>
+                <button id="quitButton">Quit to Menu</button>
+            `;
+            document.body.appendChild(pauseMenu);
+
+            document.getElementById('resumeButton').addEventListener('click', togglePause);
+            document.getElementById('quitButton').addEventListener('click', () => backToMenu());
+        }
+        function init(){
+            setupScene();
+            setupLighting();
+            loadCharacterModel();
+
+            if (mazeLevel == mazeOne){
+                characterBody.position.set(20,characterHeight/2,3);
+                createGround(49,49);
+                createVendor(mazeOne);
+                createCoins(mazeOne);
+                createPhysicsMaze(mazeOne)
+                createMaze(mazeOne);
+                createTraps(mazeOne);
+
+                goalX = 29;
+                goalZ = 49;
+            }else if(mazeLevel==mazeTwo){
+                characterBody.position.set(28,characterHeight/2,3);
+                createGround(65,65);
+                createVendor(mazeTwo);
+                createCoins(mazeTwo);
+                createPhysicsMaze(mazeTwo)
+                createMaze(mazeTwo);
+                createTraps(mazeTwo);
+
+                goalX = 37;
+                goalZ = 65;
+            }else{
+                characterBody.position.set(45,characterHeight/2,3);
+                createGround(89,89);
+                createVendor(mazeThree);
+                createCoins(mazeThree);
+                createPhysicsMaze(mazeThree)
+                createMaze(mazeThree);
+                createTraps(mazeThree);
+
+                goalX = 45;
+                goalZ = 89;
+            }
+
+            createPauseMenu();
+            setupRiddleEventListeners();
+
+        }
+        document.getElementById('backToMenu').addEventListener('click', () => backToMenu());
+
+        // Function to create wall bodies for the maze
+        function createPhysicsMaze(mazeArray) {
+    // Define the wall shape once (can be reused for each wall)
+    const wallThickness = 0.5;  // Increase thickness for better collision detection
+    const wallHeight = 3;  // Height of the wall
+    const wallMaterial = new CANNON.Material();  // Optional: Assign specific material for the walls
+
+    mazeArray.forEach(wall => {
+        // Calculate the length and angle of each wall
+        const length = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1);  // Length of the wall
+        const angle = Math.atan2(wall.y2 - wall.y1, wall.x2 - wall.x1);  // Angle of the wall in radians
+
+        // Create the wall's shape and body
+        const wallShape = new CANNON.Box(new CANNON.Vec3(length / 2, wallHeight / 2, wallThickness / 2));
+        const wallBody = new CANNON.Body({
+            mass: 0,  // Static wall (mass 0 means it doesn't move)
+            shape: wallShape,
+            material: wallMaterial,  // Optional: Material for friction, etc.
+            position: new CANNON.Vec3(
+                (wall.x1 + wall.x2) / 2,  // Middle point between start and end X positions
+                wallHeight / 2,  // Set the wall's vertical position (Y-axis) based on half its height
+                (wall.y1 + wall.y2) / 2   // Middle point between start and end Z positions (Cannon uses Z instead of Y)
+            )
+        });
+
+        // Rotate the wall to match its direction in the maze
+        wallBody.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), -angle);
+
+        // Add the wall body to the Cannon.js physics world
+        world.addBody(wallBody);
+    });
+}
+
+
+        // Maze
+        function createMaze(mazeArray) {
+            let wallMaterial;
+            if (mazeArray == mazeOne){
+                console.log('poes');
+                wallMaterial = new THREE.MeshStandardMaterial({ 
+                    map: mazeOneWall
+                    // map: mazeOneWallBC,
+                    // roughnessMap: mazeOneWallR,
+                    // normalMap: mazeOneWallN,
+                    // aoMap: mazeOneWallAO,
+                    // displacementMap: mazeOneWallH,
+                    // displacementScale: 0.1
+                });
+            } else if (mazeArray == mazeTwo){
+                console.log('poes2');
+                wallMaterial = new THREE.MeshStandardMaterial({ map: mazeTwoWall});
+            } else {
+                console.log('poes3');
+                wallMaterial = new THREE.MeshStandardMaterial({ map: mazeThreeWall});
+            }
+            mazeArray.forEach(wall => {
+                const length = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1); // Calculate wall length
+
+                // Create wall geometry (e.g., BoxGeometry) based on the length
+                const wallGeometry = new THREE.BoxGeometry(length, 6, 0.5); // 3 units tall, 0.5 units thick
+                const wallMesh = new THREE.Mesh(wallGeometry, wallMaterial);
+
+                // Position the wall in the middle of its start and end points
+                wallMesh.position.set(
+                    (wall.x1 + wall.x2) / 2,
+                    3,  // Half the height to position on the ground
+                    (wall.y1 + wall.y2) / 2
+                );
+
+                // Rotate the wall based on its direction
+                const angle = Math.atan2(wall.y2 - wall.y1, wall.x2 - wall.x1);
+                wallMesh.rotation.y = -angle;
+
+                wallMesh.castShadow = true; // Enable shadow casting
+                wallMesh.receiveShadow = true; // Enable shadow receiving
+                scene.add(wallMesh); // Add the wall to the scene
+            });
+        }
+
+        // Vendor-PowerUps and Coins
+        function createVendor(mazeNumber) {
+            let vendorPositions;
+
+            if (mazeNumber === mazeOne) {
+                vendorPositions = [
+                    { x: 5, z: 5 },  // Positions for Maze One
+                    { x: 35, z: 38 },
+                    { x: 2, z: 45},
+                    { x: 26, z: 2 },
+                ];
+            } else if (mazeNumber === mazeTwo) {
+                vendorPositions = [
+                     { x: 11, z: 20 }, { x: 27, z: 30 }, {x:3, z:63}, { x:35, z:2},   // Positions for Maze Two
+                    { x: 42, z: 50 }
+                ];
+            } else {
+                vendorPositions = [
+                    { x: 3, z: 3 },       
+                    { x: 75, z: 3 },   
+                    { x: 3, z: 86 },      
+                    { x: 83, z: 86 },     
+                    { x: 51, z: 50 }, 
+                    {x: 3, z:35},
+                    {x: 27, z:39}
+    
+                ];
+            }
+
+            // Clear any existing vendors before adding new ones for the current maze
+            vendors.forEach(vendor => {
+                scene.remove(vendor);
+            });
+            vendors.length = 0;
+
+            // Load vendors for the specified maze
+            vendorPositions.forEach(position => {
+                const loader = new GLTFLoader();
+                loader.load(
+                    'vendor.glb',
+                    (gltf) => {
+                        const vendor = gltf.scene;
+                        vendor.position.set(position.x, 0, position.z); // Set the vendor's position
+                        vendor.scale.set(1, 1, 1);
+                        scene.add(vendor);
+                        vendors.push(vendor);
+
+                        console.log(`Vendor added at x: ${position.x}, z: ${position.z}`);
+                    },
+                    (xhr) => {
+                        console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+                    },
+                    (error) => {
+                        console.error('An error happened', error);
+                    }
+                );
+            });
+        }
+
+
+        function createCoins(mazeNumber) {
+            let coinPositions;
+
+            // Use an if statement to check the current maze and assign coin positions accordingly
+            if (mazeNumber === mazeOne) {
+                coinPositions = [
+                    { x: 5, z: 12 }, { x: 12, z: 5}, {x: 12, z: 45}, { x: 30, z: 30 }, { x: 45, z: 45 },  // Positions for Maze One
+                    { x: 20, z: 20 }, { x: 45, z: 5 }
+                ];
+            } else if (mazeNumber === mazeTwo) {
+                coinPositions = [
+                    { x: 35, z: 30 }, { x:15, z:60}, {x:20, z:30}, {x:4, z:15}, {x:45, z:13}, {x:47, z:30}, // Positions for Maze Two
+                    { x: 45, z: 45 }, { x: 60, z: 63 }
+                ];
+            } else {
+                coinPositions = [
+                    { x: 12, z: 13 },
+                    {x: 12, z: 50 },
+                    {x: 17, z: 85 },
+                    {x: 49, z: 28 },
+                    {x: 49, z: 36 },
+                    {x: 70, z: 50 },
+                    {x: 70, z: 60 }
+                ];
+            }
+
+            // Clear any existing coins before adding new ones for the current maze
+            coinObjects.forEach(coin => {
+                scene.remove(coin);
+            });
+            coinObjects.length = 0; // Reset the coin array
+
+            // Load coins for the specified maze
+            coinPositions.forEach(position => {
+                const coinGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.1, 32);
+                const coinMaterial = new THREE.MeshStandardMaterial({ color: 0xffd700 });
+                const coin = new THREE.Mesh(coinGeometry, coinMaterial);
+                coin.rotation.x = Math.PI / 2;  // Rotate the coin flat
+                coin.position.set(position.x, 0.5, position.z);  // Set coin position
+                scene.add(coin);
+                coinObjects.push(coin);
+            });
+        }
+
+
+
+        function checkForCoins() {
+            if (!character) return;
+
+            coinObjects.forEach((coin, index) => {
+                const distance = character.position.distanceTo(coin.position);
+                if (distance < 1.5) {
+                    collectCoin();
+                    scene.remove(coin);
+                    coinObjects.splice(index, 1);
+                }
+            });
+        }
+
+        function collectCoin() {
+            coins = coins + 10;
+            console.log(coins);
+            coinsElement.textContent = coins;
+            console.log(coins);
+        }
+
+        function tryInteractWithVendor() {
+            if (!character || vendors.length === 0) return;
+
+            vendors.forEach(vendor =>{
+                const distance = character.position.distanceTo(vendor.position);
+                if (distance <= VENDOR_INTERACTION_DISTANCE) {
+                    openVendorMenu();
+            }
+            });
+            
+        }
+
+        function checkVendorProximity() {
+            if (!character || vendors.length === 0) return; // Ensure both character and vendor are loaded
+            interactionMessage.style.display = 'none'; // Hide message
+
+            vendors.forEach(vendor =>{
+                const distance = character.position.distanceTo(vendor.position);
+                if (distance <= VENDOR_INTERACTION_DISTANCE) {
+                    interactionMessage.style.display = 'block'; // Show message
+                } 
+            
+            });
+            
+        }
+
+        function openVendorMenu() {
+            vendorMenu.style.display = 'block';
+            controls.unlock();
+        }
+
+        window.closeVendorMenu = function() {
+            vendorMenu.style.display = 'none';
+            controls.lock();
+        };
+
+        window.buyPowerUp = function(powerUp) {
+            if (powerUp === 'superSpeed' && coins >= 10) {
+                coins -= 10;
+                superSpeedActive = true;
+                coinsElement.textContent = coins;
+                alert("Super Speed purchased for 20 Seconds!");
+
+                closePowerUpMenu();
+
+                setTimeout(() => {
+                    superSpeedActive = false;
+                    alert("Super Speed has expired.");
+                }, 20000);
+            } 
+            else if (powerUp === 'healthBoost' && coins >= 15) {
+                coins -= 15;
+                health = Math.min(100, health + 20);
+                healthElement.textContent = health;
+                coinsElement.textContent = coins;
+                alert("Health Boost purchased!");
+
+                closePowerUpMenu();
+            }
+            else if(powerUp === 'Invincibility' && coins >= 10){
+                coins -= 10;
+                coinsElement.textContent = coins;
+        
+                invincible = true;
+                alert("Invincibility purchased for 20 seconds!");
+                closePowerUpMenu();
+
+                setTimeout(() => {
+                    invincible = false;  
+                    alert("Invincibility has expired.");
+                }, 20000);
+            }
+            else if(powerUp === 'superJump' && coins >= 20){
+                coins -= 20;
+                coinsElement.textContent = coins;
+                jumpStrength = 30;
+
+
+                alert("Super Jump purchased for 10 Seconds!");
+                closePowerUpMenu();
+
+
+                setTimeout(() => {
+                    jumpStrength = 6;
+                    alert("Super Jump has expired.");
+                }, 10000);
+            } 
+            else {
+                alert("Not enough coins!");
+            }
+        };
+
+        function setupRiddleEventListeners() {
+            document.getElementById('vendorMenu').querySelector('button:nth-child(3)').addEventListener('click', showRiddleMenu);
+            document.getElementById('riddleMenu').querySelector('button:nth-child(4)').addEventListener('click', closeRiddleMenu);
+        }
+
+        function showRiddleMenu() {
+            fetchRiddle();
+            riddleMenu.style.display = 'block';
+            vendorMenu.style.display = 'none';
+            controls.unlock();  // Ensure cursor is visible
+
+        }
+
+        function closeRiddleMenu() {
+            riddleMenu.style.display = 'none';
+            vendorMenu.style.display = 'block';
+            controls.unlock();  // Keep the cursor visible if going back to vendor menu
+
+        }
+
+        function fetchRiddle() {
+            currentRiddle = mockRiddles[Math.floor(Math.random() * mockRiddles.length)];
+            document.getElementById('riddleQuestion').textContent = currentRiddle.question;
+        }
+
+        function submitRiddleAnswer() {
+            const userAnswer = document.getElementById('riddleAnswer').value.toLowerCase().trim();
+            if (userAnswer === currentRiddle.answer) {
+                coins += 20;
+                coinsElement.textContent = coins;
+                alert('Correct! You earned 20 coins!');
+                closeRiddleMenu();
+            } else {
+                alert('Sorry, that\'s incorrect. Try again or close the riddle menu.');
+            }
+        }
+
+        function showPowerUpMenu() {
+            powerUpMenu.style.display = 'block';
+            vendorMenu.style.display = 'none';
+            controls.unlock();  // Show the cursor when interacting with the menu
+
+        }   
+
+        function closePowerUpMenu() {
+            powerUpMenu.style.display = 'none';
+            vendorMenu.style.display = 'block';
+            controls.lock();  // Hide the cursor and lock the pointer when done
+
+
+        }
+
+        function checkGameStatus(mazeLevel) {
+            if(characterBody.position.x<0 || characterBody.position.z<0) {
+                endGame('over');
+            }
+            if ((characterBody.position.x > goalX - 3) && (characterBody.position.x < goalX + 3) &&
+                (characterBody.position.z > goalZ - 3) && (characterBody.position.z < goalZ + 3)){
+                    endGame('complete');
+            }
+            console.log(characterBody.position.x);
+            console.log(characterBody.position.z);
+        }
+        function endGame(status) {
+        isPaused = true;
+        controls.unlock();
+
+        if (status === 'over') {
+            document.getElementById('gameOverScreen').style.display = 'block';
+        } else if (status === 'complete') {
+            document.getElementById('wellDoneScreen').style.display = 'block';
+        }
+    }
+
+        function applyGravity() {
+            if (!isGrounded) {
+        // Apply gravity if the player is not grounded
+                character.position.y += jumpVelocity;
+                jumpVelocity += gravity;
+
+        // Ensure the character doesn't fall below the ground
+                if (character.position.y <= 0) {
+                    character.position.y <= 0
+                    isGrounded = true;
+                    jumpVelocity = 0; // Reset jump velocity when grounded
+                }
+            }
+            character.position.copy(characterBody.position);
+        }
+        function jump() {
+            if (isGrounded) {
+                characterBody.velocity.y = jumpStrength;
+                jumpVelocity = jumpStrength; // Apply jump strength when jumping
+                isGrounded = false; // The player is now in the air
+            }
+        }
+
+        window.showRiddleMenu = showRiddleMenu;
+        window.closeRiddleMenu = closeRiddleMenu;
+        window.submitRiddleAnswer = submitRiddleAnswer;
+        window.showPowerUpMenu = showPowerUpMenu;
+        window.closePowerUpMenu = closePowerUpMenu;
+
+
+        init();
+        </script>
+            <div id="gameOverScreen" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0,0,0,0.8); color: white; padding: 20px; text-align: center; border-radius: 10px;">
+                <h2>Game Over</h2>
+                <p>You died. Better luck next time!</p>
+                <button onclick="backToMenu()">Back to Main Menu</button>
+            </div>
+            
+            <div id="wellDoneScreen" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0,0,0,0.8); color: white; padding: 20px; text-align: center; border-radius: 10px;">
+                <h2>Well Done!</h2>
+                <p>You completed the maze!</p>
+                <button onclick="backToMenu()">Back to Main Menu</button>
+            </div>
+
+    </body>
+</html>
