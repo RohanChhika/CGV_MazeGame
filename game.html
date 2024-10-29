@@ -1445,16 +1445,7 @@ function animate() {
             
         }
 
-        function openVendorMenu() {
-            vendorMenu.style.display = 'block';
-            controls.unlock();
-        }
-
-        window.closeVendorMenu = function() {
-            vendorMenu.style.display = 'none';
-            controls.lock();
-        };
-
+        
         // Create a timer display element
         const timerElement = document.createElement('div');
         timerElement.style.position = 'absolute';
@@ -1600,6 +1591,15 @@ function animate() {
         //     }
         // };
 
+        function openVendorMenu() {
+            vendorMenu.style.display = 'block';
+            controls.unlock();
+        }
+
+        window.closeVendorMenu = function() {
+            vendorMenu.style.display = 'none';
+        };
+
         function setupRiddleEventListeners() {
             document.getElementById('vendorMenu').querySelector('button:nth-child(3)').addEventListener('click', showRiddleMenu);
             document.getElementById('riddleMenu').querySelector('button:nth-child(4)').addEventListener('click', closeRiddleMenu);
@@ -1609,15 +1609,11 @@ function animate() {
             fetchRiddle();
             riddleMenu.style.display = 'block';
             vendorMenu.style.display = 'none';
-            controls.unlock();  // Ensure cursor is visible
-
         }
 
         function closeRiddleMenu() {
             riddleMenu.style.display = 'none';
             vendorMenu.style.display = 'block';
-            controls.unlock();  // Keep the cursor visible if going back to vendor menu
-
         }
 
         function fetchRiddle() {
@@ -1640,16 +1636,11 @@ function animate() {
         function showPowerUpMenu() {
             powerUpMenu.style.display = 'block';
             vendorMenu.style.display = 'none';
-            controls.unlock();  // Show the cursor when interacting with the menu
-
         }   
 
         function closePowerUpMenu() {
             powerUpMenu.style.display = 'none';
             vendorMenu.style.display = 'block';
-            controls.lock();  // Hide the cursor and lock the pointer when done
-
-
         }
 
         function checkGameStatus(mazeLevel) {
