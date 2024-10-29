@@ -481,6 +481,21 @@
             const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5); // Directional light
             directionalLight.position.set(10, 20, 10); // Adjust position
             directionalLight.castShadow = true; // Enable shadows
+// Create a spotlight
+const endLight = new THREE.SpotLight(0xffffff, 0.5);
+            endLight.position.set(29, 49, 0.2); // Set spotlight position
+            endLight.castShadow = true; // Enable shadows
+
+            // Configure the target at the end of the maze
+            const targetObject = new THREE.Object3D();
+            targetObject.position.set(29, 0, 0); // Adjust target position as needed
+            scene.add(targetObject); // Add target to the scene
+
+            // Make the spotlight point towards the target
+            endLight.target = targetObject;
+            scene.add(endLight); // Add spotlight to the scene
+
+
 
             // Configure the shadow quality for the directional light
             // directionalLight.shadow.mapSize.width = 1024; // Shadow map resolution (quality)
@@ -1280,49 +1295,107 @@ function animate() {
         }
 
 
+        // function createCoins(mazeNumber) {
+        //     let coinPositions;
+
+        //     // Use an if statement to check the current maze and assign coin positions accordingly
+        //     if (mazeNumber === mazeOne) {
+        //         coinPositions = [
+        //             { x: 5, z: 12 }, { x: 12, z: 5}, {x: 12, z: 45}, { x: 30, z: 30 }, { x: 45, z: 45 },  // Positions for Maze One
+        //             { x: 20, z: 20 }, { x: 45, z: 5 }
+        //         ];
+        //     } else if (mazeNumber === mazeTwo) {
+        //         coinPositions = [
+        //             { x: 35, z: 30 }, { x:15, z:60}, {x:20, z:30}, {x:4, z:15}, {x:45, z:13}, {x:47, z:30}, // Positions for Maze Two
+        //             { x: 45, z: 45 }, { x: 60, z: 63 }
+        //         ];
+        //     } else {
+        //         coinPositions = [
+        //             { x: 12, z: 13 },
+        //             {x: 12, z: 50 },
+        //             {x: 17, z: 85 },
+        //             {x: 49, z: 28 },
+        //             {x: 49, z: 36 },
+        //             {x: 70, z: 50 },
+        //             {x: 70, z: 60 }
+        //         ];
+        //     }
+
+        //     // Clear any existing coins before adding new ones for the current maze
+        //     coinObjects.forEach(coin => {
+        //         scene.remove(coin);
+        //     });
+        //     coinObjects.length = 0; // Reset the coin array
+
+        //     // Load coins for the specified maze
+        //     coinPositions.forEach(position => {
+        //         const coinGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.1, 32);
+        //         const coinMaterial = new THREE.MeshStandardMaterial({ color: 0xffd700 });
+        //         const coin = new THREE.Mesh(coinGeometry, coinMaterial);
+        //         coin.rotation.x = Math.PI / 2;  // Rotate the coin flat
+        //         coin.position.set(position.x, 0.5, position.z);  // Set coin position
+        //         scene.add(coin);
+        //         coinObjects.push(coin);
+        //     });
+        // }
+
         function createCoins(mazeNumber) {
             let coinPositions;
 
-            // Use an if statement to check the current maze and assign coin positions accordingly
+            // Assign coin positions based on the current maze
             if (mazeNumber === mazeOne) {
                 coinPositions = [
-                    { x: 5, z: 12 }, { x: 12, z: 5}, {x: 12, z: 45}, { x: 30, z: 30 }, { x: 45, z: 45 },  // Positions for Maze One
-                    { x: 20, z: 20 }, { x: 45, z: 5 }
+                    { x: 5, z: 12 }, { x: 12, z: 5 }, { x: 12, z: 45 },
+                    { x: 30, z: 30 }, { x: 45, z: 45 }, { x: 20, z: 20 },
+                    { x: 45, z: 5 }
                 ];
             } else if (mazeNumber === mazeTwo) {
                 coinPositions = [
-                    { x: 35, z: 30 }, { x:15, z:60}, {x:20, z:30}, {x:4, z:15}, {x:45, z:13}, {x:47, z:30}, // Positions for Maze Two
+                    { x: 35, z: 30 }, { x: 15, z: 60 }, { x: 20, z: 30 },
+                    { x: 4, z: 15 }, { x: 45, z: 13 }, { x: 47, z: 30 },
                     { x: 45, z: 45 }, { x: 60, z: 63 }
                 ];
             } else {
                 coinPositions = [
-                    { x: 12, z: 13 },
-                    {x: 12, z: 50 },
-                    {x: 17, z: 85 },
-                    {x: 49, z: 28 },
-                    {x: 49, z: 36 },
-                    {x: 70, z: 50 },
-                    {x: 70, z: 60 }
+                    { x: 12, z: 13 }, { x: 12, z: 50 }, { x: 17, z: 85 },
+                    { x: 49, z: 28 }, { x: 49, z: 36 }, { x: 70, z: 50 },
+                    { x: 70, z: 60 }
                 ];
             }
 
-            // Clear any existing coins before adding new ones for the current maze
-            coinObjects.forEach(coin => {
-                scene.remove(coin);
-            });
-            coinObjects.length = 0; // Reset the coin array
+            // Clear existing coins
+            coinObjects.forEach(coin => scene.remove(coin));
+            coinObjects.length = 0;
 
-            // Load coins for the specified maze
+            // Create glowing and reflective coins
             coinPositions.forEach(position => {
                 const coinGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.1, 32);
-                const coinMaterial = new THREE.MeshStandardMaterial({ color: 0xffd700 });
+
+                // Use MeshPhysicalMaterial for reflection and metallic effects
+                const coinMaterial = new THREE.MeshPhysicalMaterial({
+                    color: 0xffd700, // Gold color
+                    metalness: 1.0,  // Full metallic effect
+                    roughness: 0.2,  // Slight roughness for realistic reflection
+                    emissive: 0xffd700, // Glow effect color
+                    emissiveIntensity: 0.8, // Glow intensity
+                    clearcoat: 1.0, // Adds reflective clearcoat on top
+                    clearcoatRoughness: 0.1 // Smooth clearcoat
+                });
+
                 const coin = new THREE.Mesh(coinGeometry, coinMaterial);
-                coin.rotation.x = Math.PI / 2;  // Rotate the coin flat
-                coin.position.set(position.x, 0.5, position.z);  // Set coin position
-                scene.add(coin);
-                coinObjects.push(coin);
+                coin.rotation.x = Math.PI / 2; // Rotate flat
+                coin.position.set(position.x, 0.5, position.z); // Set position
+
+                // Add a small point light to simulate the glow
+                const glowLight = new THREE.PointLight(0xffd700, 0.5, 3); // Color, intensity, range
+                glowLight.position.set(position.x, 0.5, position.z);
+                scene.add(glowLight); // Add light to the scene
+
+                scene.add(coin); // Add coin to the scene
+                coinObjects.push(coin); // Store reference to the coin
             });
         }
+
 
 
 
@@ -1382,7 +1455,38 @@ function animate() {
             controls.lock();
         };
 
-        window.buyPowerUp = function(powerUp) {
+        // Create a timer display element
+        const timerElement = document.createElement('div');
+        timerElement.style.position = 'absolute';
+        timerElement.style.top = '10px';
+        timerElement.style.left = '50%';
+        timerElement.style.transform = 'translate(-50%, -50%)'; // Center it
+        timerElement.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+        timerElement.style.color = 'white';
+        timerElement.style.padding = '10px';
+        timerElement.style.borderRadius = '5px';
+        timerElement.style.fontSize = '18px';
+        timerElement.style.display = 'none'; // Hide initially
+        document.body.appendChild(timerElement);
+
+        function startCountdown(duration, message) {
+            let remainingTime = duration;
+
+            // Display the timer
+            timerElement.style.display = 'block';
+
+            const interval = setInterval(() => {
+                remainingTime -= 1;
+                timerElement.textContent = `${message}: ${remainingTime} seconds`;
+
+                if (remainingTime <= 0) {
+                    clearInterval(interval);
+                    timerElement.style.display = 'none'; // Hide timer when finished
+                }
+            }, 1000);
+        }
+
+        window.buyPowerUp = function (powerUp) {
             if (powerUp === 'superSpeed' && coins >= 10) {
                 coins -= 10;
                 superSpeedActive = true;
@@ -1390,6 +1494,7 @@ function animate() {
                 alert("Super Speed purchased for 20 Seconds!");
 
                 closePowerUpMenu();
+                startCountdown(20, 'Super Speed'); // Start the countdown
 
                 setTimeout(() => {
                     superSpeedActive = false;
@@ -1404,29 +1509,29 @@ function animate() {
                 alert("Health Boost purchased!");
 
                 closePowerUpMenu();
-            }
-            else if(powerUp === 'Invincibility' && coins >= 10){
+            } 
+            else if (powerUp === 'Invincibility' && coins >= 10) {
                 coins -= 10;
                 coinsElement.textContent = coins;
-        
                 invincible = true;
                 alert("Invincibility purchased for 20 seconds!");
+
                 closePowerUpMenu();
+                startCountdown(20, 'Invincibility'); // Start the countdown
 
                 setTimeout(() => {
-                    invincible = false;  
+                    invincible = false;
                     alert("Invincibility has expired.");
                 }, 20000);
-            }
-            else if(powerUp === 'superJump' && coins >= 20){
+            } 
+            else if (powerUp === 'superJump' && coins >= 20) {
                 coins -= 20;
                 coinsElement.textContent = coins;
                 jumpStrength = 30;
 
-
                 alert("Super Jump purchased for 10 Seconds!");
                 closePowerUpMenu();
-
+                startCountdown(10, 'Super Jump'); // Start the countdown
 
                 setTimeout(() => {
                     jumpStrength = 6;
@@ -1437,6 +1542,63 @@ function animate() {
                 alert("Not enough coins!");
             }
         };
+
+
+        // window.buyPowerUp = function(powerUp) {
+        //     if (powerUp === 'superSpeed' && coins >= 10) {
+        //         coins -= 10;
+        //         superSpeedActive = true;
+        //         coinsElement.textContent = coins;
+        //         alert("Super Speed purchased for 20 Seconds!");
+
+        //         closePowerUpMenu();
+
+        //         setTimeout(() => {
+        //             superSpeedActive = false;
+        //             alert("Super Speed has expired.");
+        //         }, 20000);
+        //     } 
+        //     else if (powerUp === 'healthBoost' && coins >= 15) {
+        //         coins -= 15;
+        //         health = Math.min(100, health + 20);
+        //         healthElement.textContent = health;
+        //         coinsElement.textContent = coins;
+        //         alert("Health Boost purchased!");
+
+        //         closePowerUpMenu();
+        //     }
+        //     else if(powerUp === 'Invincibility' && coins >= 10){
+        //         coins -= 10;
+        //         coinsElement.textContent = coins;
+        
+        //         invincible = true;
+        //         alert("Invincibility purchased for 20 seconds!");
+        //         closePowerUpMenu();
+
+        //         setTimeout(() => {
+        //             invincible = false;  
+        //             alert("Invincibility has expired.");
+        //         }, 20000);
+        //     }
+        //     else if(powerUp === 'superJump' && coins >= 20){
+        //         coins -= 20;
+        //         coinsElement.textContent = coins;
+        //         jumpStrength = 30;
+
+
+        //         alert("Super Jump purchased for 10 Seconds!");
+        //         closePowerUpMenu();
+
+
+        //         setTimeout(() => {
+        //             jumpStrength = 6;
+        //             alert("Super Jump has expired.");
+        //         }, 10000);
+        //     } 
+        //     else {
+        //         alert("Not enough coins!");
+        //     }
+        // };
 
         function setupRiddleEventListeners() {
             document.getElementById('vendorMenu').querySelector('button:nth-child(3)').addEventListener('click', showRiddleMenu);
