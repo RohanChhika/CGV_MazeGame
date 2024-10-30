@@ -136,7 +136,7 @@
         </div>
         <div id="healthOverlay" class="overlay"></div>
 
-        <div id="nameInputModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); color: white; z-index: 1000;">
+        <div id="Name" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); color: white; z-index: 1000;">
             <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0,0,0,0.9); padding: 20px; border-radius: 10px; text-align: center;">
                 <h2>Well Done!</h2>
                 <p>You completed the maze!</p>
@@ -144,7 +144,6 @@
                 <input type="text" id="playerName" style="margin: 10px 0; padding: 10px; border-radius: 5px; border: none; width: 80%;"/>
                 <div>
                     <button id="submitName" style="padding: 10px 15px; background-color: #81c784; border: none; border-radius: 5px; cursor: pointer;">Submit</button>
-                    <button id="closeModal" style="padding: 10px 15px; background-color: #e57373; border: none; border-radius: 5px; cursor: pointer;">Cancel</button>
                 </div>
             </div>
         </div>
@@ -232,8 +231,7 @@
             const direction = new THREE.Vector3();
             const clock = new THREE.Clock();
             let prevTime = performance.now();
-                    // Timer variables
-            let startTime, elapsedTime,endTime = 0;
+            let startTime, elapsedTime,endTimem,savedTime = 0;
             let timerRunning = false;
 
 
@@ -393,22 +391,22 @@
 
 
 
-        const mockRiddles = [
+const mockRiddles = [
             {
-                question: "I speak without a mouth and hear without ears. I have no body, but I come alive with wind. What am I?",
-                answer: "echo"
+                question: "I come to those who search for me, though I am something you cannot see. I’m the end of a journey and the start of a dream. What am I?",
+                answer: "goal"
             },
             {
-                question: "What has keys, but no locks; space, but no room; you can enter, but not go in?",
-                answer: "keyboard"
+                question: "Many paths I offer, but one leads to the prize. Through twists, turns, and careful tries, only then will you reach the end. What am I?",
+                answer: "maze"
             },
             {
-                question: "I have cities, but no houses. I have mountains, but no trees. I have water, but no fish. What am I?",
-                answer: "map"
+                question: "I can open any way, though I have no form to stay. I’m a friend to those who seek, finding me is what they seek. What am I?",
+                answer: "key"
             },
             {
-                question: "What gets wet while drying?",
-                answer: "towel"
+                question: "I am a guide, though I do not speak. I help those lost, and that is my peak. With my light, you’ll find the night turns bright. What am I?",
+                answer: "torch"
             },
             {
                 question: "The more you take, the more you leave behind. What am I?",
@@ -423,7 +421,7 @@
         // Stop timer function (optional if you want to stop at maze completion)
         function stopTimer() {
             endTime = Date.now();
-            elapsedTime = Math.floor((endTime - startTime) / 1000);
+            savedTime = Math.floor((endTime - startTime) / 1000);
             timerRunning = false;
         }
 
@@ -440,6 +438,7 @@
             renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Softer shadows
             renderer.toneMapping = THREE.ACESFilmicToneMapping; // Use ACES filmic tone mapping
             renderer.toneMappingExposure = 1; // Adjust tone mapping exposure
+
     
             // Append renderer to the DOM
             document.body.appendChild(renderer.domElement);
@@ -483,69 +482,38 @@
         });
         }
         
-        let spotlight;
+let spotlight;
         function setupLighting() {
             // Set up ambient light
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.05); // Lower intensity ambient light
             scene.add(ambientLight);
-            
+
+        if (mazeLevel!=mazeOne){
+
+
             //flashlight as a spotlight attached to the camera
-            if (mazeLevel === mazeOne){
-                spotlight=new THREE.SpotLight(0xffffff, 3, 100, Math.PI / 4, 0.3, 1);
-            }
-            else if (mazeLevel === mazeTwo){
-                spotlight=new THREE.SpotLight(0xffffff, 3, 100, Math.PI / 5, 0.3, 1);
-            }
-            else{
-                spotlight=new THREE.SpotLight(0xffffff, 3, 100, Math.PI / 6, 0.3, 1); 
-            }
-            spotlight.position.set(0, 0, 0); // Start from the camera's position
+            spotlight = new THREE.SpotLight(0xffffff, 3, 100, Math.PI / 8, 0.3, 1);
+            spotlight.position.copy(camera.position); 
             spotlight.castShadow = true; // Enable shadows
+
             spotlight.shadow.mapSize.width = 2048; // Shadow map resolution
             spotlight.shadow.mapSize.height = 2048;
-            
-            // Add a target to make the spotlight follow the camera direction
-            scene.add(spotlight);  // Add the spotlight to the scene
-            spotlight.target = new THREE.Object3D();
+
+            spotlight.shadow.camera.near = 0.5;
+            spotlight.shadow.camera.far = 50;
+            spotlight.shadow.camera.fov = 5;  // Field of view of the shadow camera
+
+            spotlight.shadow.bias = -0.0001;
+
+
+            const target = new THREE.Object3D();
+            target.position.set(0, 0, -1);  // In front of the camera
+            spotlight.target.position.copy(target.position.add(camera.position)); 
             scene.add(spotlight.target);
-
-            // Set up directional light with shadows
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5); // Directional light
-            directionalLight.position.set(10, 20, 10); // Adjust position
-            directionalLight.castShadow = true; // Enable shadows
-// Create a spotlight
-const endLight = new THREE.SpotLight(0xffffff, 0.5);
-            endLight.position.set(29, 49, 0.2); // Set spotlight position
-            endLight.castShadow = true; // Enable shadows
-
-            // Configure the target at the end of the maze
-            const targetObject = new THREE.Object3D();
-            targetObject.position.set(29, 0, 0); // Adjust target position as needed
-            scene.add(targetObject); // Add target to the scene
-
-            // Make the spotlight point towards the target
-            endLight.target = targetObject;
-            scene.add(endLight); // Add spotlight to the scene
-
-
-
-            // Configure the shadow quality for the directional light
-            // directionalLight.shadow.mapSize.width = 1024; // Shadow map resolution (quality)
-            // directionalLight.shadow.mapSize.height = 1024;
-            // directionalLight.shadow.camera.left = -50;
-            // directionalLight.shadow.camera.right = 50;
-            // directionalLight.shadow.camera.top = 50;
-            // directionalLight.shadow.camera.bottom = -50;
-            // directionalLight.shadow.camera.near = 1;
-            // directionalLight.shadow.camera.far = 100;
-          //  scene.add(directionalLight);
-
-            // Add point light for additional lighting effect
-            const pointLight = new THREE.PointLight(0xffaa00, 1, 50); // Point light with yellow tint
-            pointLight.position.set(10, 10, 10); // Set position
-            scene.add(pointLight);
+            scene.add(spotlight);  // Add spotlight to the scene
         }
-
+            
+        }
         function createGround(X_Max,Z_Max) {
             const groundGeometry = new THREE.PlaneGeometry(X_Max, Z_Max);
             let groundMaterial;
@@ -950,9 +918,14 @@ const endLight = new THREE.SpotLight(0xffffff, 0.5);
             controls = new PointerLockControls(camera, document.body);
             scene.add(controls.getObject());
 
-            document.addEventListener('click', () => {
-                controls.lock();
-                console.log("Pointer locked"); // Add a log to confirm when pointer lock is engaged
+            document.addEventListener('click', (event) => {
+                const vendorMenu = document.getElementById('vendorMenu'); 
+                const isMenuClick = vendorMenu && vendorMenu.contains(event.target);
+
+                if (!isMenuClick && !isInteracting) {
+                    controls.lock();
+                    console.log("Pointer locked"); 
+                }
             });
             document.addEventListener('keydown', onKeyDown);
             document.addEventListener('keyup', onKeyUp);
@@ -996,7 +969,7 @@ const endLight = new THREE.SpotLight(0xffffff, 0.5);
 
 
         function onKeyDown(event) {
-            if (event.code === 'Backspace') {
+            if (event.code === 'ShiftLeft') {
             togglePause();
             return;
             }
@@ -1121,6 +1094,28 @@ const endLight = new THREE.SpotLight(0xffffff, 0.5);
         camera.lookAt(characterPosition.clone().add(new THREE.Vector3(0, characterHeight, 0)));
     }
 }
+        function addExitLight(goalX, goalZ) {
+            // Create the exit light (a spotlight)
+            const exitLight = new THREE.SpotLight(0xffd700, 2, 50, Math.PI / 6, 0.3, 1);  // Golden yellow light
+            exitLight.position.set(goalX, 10, goalZ);  // Position it above the goal
+
+            // Enable shadows for the exit light
+            exitLight.castShadow = true;
+            exitLight.shadow.mapSize.width = 1024;  // Adjust for higher resolution shadows
+            exitLight.shadow.mapSize.height = 1024;
+            exitLight.shadow.camera.near = 1;
+            exitLight.shadow.camera.far = 50;
+
+            // Create a target object for the exit light to point downward
+            const exitTarget = new THREE.Object3D();
+            exitTarget.position.set(goalX, 0, goalZ);  // Aim the light at the goal
+            scene.add(exitTarget);
+            exitLight.target = exitTarget;  // Set the light's target
+
+            // Add the exit light and target to the scene
+            scene.add(exitLight);
+            scene.add(exitLight.target);
+        }
 
         function playWalkAnimation() {
             if (!isWalking && mixer) {
@@ -1214,13 +1209,17 @@ function animate() {
     }
     //flashlight//
     // Update the spotlight to point in the direction the camera is looking
-    const cameraDirection = new THREE.Vector3();
-    camera.getWorldDirection(cameraDirection); // Get the camera's direction
-    cameraDirection.normalize();//Normalize to ensure correct length
-    spotlight.target.position.copy(camera.position).add(cameraDirection); // Move the target
-    spotlight.target.updateMatrixWorld();  // Ensure the matrix is updated
-    spotlight.position.copy(camera.position);  // Sync position with camera
-    
+    if (spotlight){
+        const cameraDirection = new THREE.Vector3();
+        camera.getWorldDirection(cameraDirection); // Get the camera's direction
+        cameraDirection.normalize();//Normalize to ensure correct length
+        spotlight.target.position.copy(camera.position).add(cameraDirection); // Move the target
+        spotlight.target.updateMatrixWorld();  // Ensure the matrix is updated
+        spotlight.position.copy(camera.position);  // Sync position with camera
+        spotlight.intensity = 5 + Math.random() * 0.8;
+        
+    }
+
     updateCameraPosition();
     checkVendorProximity();
     minimapRenderer.render(scene, minimapCamera);
@@ -1343,6 +1342,21 @@ function animate() {
                 startTimer();
                 goalX = 29;
                 goalZ = 49;
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5); // Directional light
+                directionalLight.position.set(10, 30, 10); // Adjust position
+                directionalLight.castShadow = true; // Enable shadows
+
+                // Configure the shadow quality for the directional light
+                directionalLight.shadow.mapSize.width = 2048; // Shadow map resolution (quality)
+                directionalLight.shadow.mapSize.height = 2048;
+                directionalLight.shadow.camera.left = -50;
+                directionalLight.shadow.camera.right = 50;
+                directionalLight.shadow.camera.top = 50;
+                directionalLight.shadow.camera.bottom = -50;
+                directionalLight.shadow.camera.near = 1;
+                directionalLight.shadow.camera.far = 100;
+
+                scene.add(directionalLight);
             }else if(mazeLevel==mazeTwo){
                 characterBody.position.set(28,characterHeight/2,3);
                 createGround(65,65);
@@ -1368,7 +1382,7 @@ function animate() {
                 goalX = 45;
                 goalZ = 89;
             }
-
+            addExitLight(goalX,goalZ);
             createPauseMenu();
             setupRiddleEventListeners();
 
@@ -1606,50 +1620,17 @@ function animate() {
             console.log(coins);
         }
         function tryInteractWithVendor() {
-    if (!character || vendors.length === 0) return;
+            if (!character || vendors.length === 0) return;
 
-    // Check proximity to vendors
-    let isNearVendor = false;
-    vendors.forEach(vendor => {
-        const distance = character.position.distanceTo(vendor.position);
-        if (distance <= VENDOR_INTERACTION_DISTANCE) {
-            isNearVendor = true; // Set flag if near vendor
-        }
-    });
-
-    // If not near a vendor, reset interaction state
-    if (!isNearVendor && isInteracting) {
-        closeVendorMenu(); // Close the vendor menu if it's open
-        controls.unlock(); // Unlock controls
-        isInteracting = false; // Reset interaction state
-    }
-}
-
-// Keypress event listener for interaction
-document.addEventListener('keydown', function(event) {
-    // Check if the "E" key is pressed and the character is near a vendor
-    if (event.code === 'KeyE') {
-        let isNearVendor = true;
-        vendors.forEach(vendor => {
-            const distance = character.position.distanceTo(vendor.position);
-            if (distance <= VENDOR_INTERACTION_DISTANCE) {
-                isNearVendor = true; // Set flag if near vendor
+            vendors.forEach(vendor =>{
+                const distance = character.position.distanceTo(vendor.position);
+                if (distance <= VENDOR_INTERACTION_DISTANCE) {
+                    isInteracting = true;
+                    openVendorMenu();
             }
-        });
-
-        if (isNearVendor) {
-            // Toggle interaction state
-            isInteracting = !isInteracting;
-            if (isInteracting) {
-                openVendorMenu(); // Open the vendor menu
-                controls.lock(); // Lock controls when interacting with vendor
-            } else {
-                closeVendorMenu(); // Close the vendor menu
-                controls.unlock(); // Unlock controls when done interacting
-            }
+            });
+            
         }
-    }
-});
 
         function checkVendorProximity() {
             if (!character || vendors.length === 0) return; // Ensure both character and vendor are loaded
@@ -1753,6 +1734,8 @@ document.addEventListener('keydown', function(event) {
 
         window.closeVendorMenu = function() {
             vendorMenu.style.display = 'none';
+            isInteracting = false;
+            controls.lock();
         };
 
         function setupRiddleEventListeners() {
@@ -1817,25 +1800,16 @@ document.addEventListener('keydown', function(event) {
         if (status === 'over') {
             document.getElementById('gameOverScreen').style.display = 'block';
         } else if (status === 'complete') {
-            document.getElementById('wellDoneScreen').style.display = 'block';
-
-                // Show the custom modal
-            document.getElementById('nameInputModal').style.display = 'block';
-
-                // Handle the submit button click
+            document.getElementById('Name').style.display = 'block';
             document.getElementById('submitName').onclick = function() {
             const playerName = document.getElementById('playerName').value.trim();
             if (playerName) {
-             // Add score to the leaderboard
-                addScoreToLeaderboard(playerName, elapsedTime);
-                document.getElementById('nameInputModal').style.display = 'none'; // Close the modal
+                addScoreToLeaderboard(playerName, savedTime);
+                document.getElementById('Name').style.display = 'none'; 
                 } else {
-                alert("Please enter a valid name!"); // Simple validation
+                alert("Please enter a valid name!"); 
                 }
             };
-                document.getElementById('closeModal').onclick = function() {
-                    document.getElementById('nameInputModal').style.display = 'none'; // Close the modal without saving
-                };
             }
     }
     function addScoreToLeaderboard(name, time) {
@@ -1851,25 +1825,15 @@ document.addEventListener('keydown', function(event) {
                 leaderboardKey = 'leaderboardMazeThree';
             }    
 
-            // Retrieve existing leaderboard from local storage or initialize it
             let leaderboard = JSON.parse(localStorage.getItem(leaderboardKey)) || [];
 
-            // Add the new score
             leaderboard.push({ name: name, time: time });
-
-            // Sort the leaderboard by time (ascending)
             leaderboard.sort((a, b) => a.time - b.time);
-
-            // Optional: Limit to top 10 scores
             if (leaderboard.length > 10) {
-                leaderboard.pop(); // Remove the last entry if there are more than 10 scores
+                leaderboard.pop();
             }
-
-            // Save the updated leaderboard back to local storage
             localStorage.setItem(leaderboardKey, JSON.stringify(leaderboard));
-
-            // Optional: Redirect back to the main page or refresh the leaderboard
-            window.location.href = 'index.html'; // Change to your main page if needed
+            window.location.href = 'index.html';
         }
 
         function applyGravity() {
