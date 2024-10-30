@@ -194,6 +194,8 @@
             let invincible = false;
             let health = 100, coins = 0, superSpeedActive = false;
 
+            var skyBox;
+
             // Character physics variables
             let jumpVelocity = 0;
             let jumpStrength = 6;
@@ -1151,6 +1153,7 @@ let spotlight;
         let lastTime = performance.now();
 function animate() {
     animationFrameId = requestAnimationFrame(animate);
+    skyBox.rotation.y += 0.0001;
     if (isPaused) return;
     const delta = clock.getDelta();
     world.step(1 / 60);  // Update the physics at 60fps
@@ -1329,6 +1332,8 @@ function animate() {
             setupScene();
             setupLighting();
             loadCharacterModel();
+            skyBox = skybox();
+            scene.add(skyBox);
 
             if (mazeLevel == mazeOne){
                 characterBody.position.set(20,characterHeight/2,3);
@@ -1857,6 +1862,30 @@ function animate() {
                 jumpVelocity = jumpStrength; // Apply jump strength when jumping
                 isGrounded = false; // The player is now in the air
             }
+        }
+
+        function skybox(){
+            let materialArray = [];
+            let texture_ft = new THREE.TextureLoader().load("Textures/nightsky/nightskycolor_ft.png");
+            let texture_bk = new THREE.TextureLoader().load("Textures/nightsky/nightskycolor_bk.png");
+            let texture_up = new THREE.TextureLoader().load("Textures/nightsky/nightskycolor_up.png");
+            let texture_dn = new THREE.TextureLoader().load("Textures/nightsky/nightskycolor_dn.png");
+            let texture_rt = new THREE.TextureLoader().load("Textures/nightsky/nightskycolor_rt.png");
+            let texture_lf = new THREE.TextureLoader().load("Textures/nightsky/nightskycolor_lf.png");
+            
+            materialArray.push(new THREE.MeshBasicMaterial({map: texture_ft}));
+            materialArray.push(new THREE.MeshBasicMaterial({ map: texture_bk}));
+            materialArray.push(new THREE.MeshBasicMaterial({ map: texture_up}));
+            materialArray.push(new THREE.MeshBasicMaterial({ map: texture_dn}));
+            materialArray.push(new THREE.MeshBasicMaterial({ map: texture_rt}));
+            materialArray.push(new THREE.MeshBasicMaterial({ map: texture_lf}));
+
+            for (let i = 0; i < 6; i++) {
+                materialArray[i].side = THREE.BackSide;
+            }
+            let skyBoxGeo = new THREE.BoxGeometry(600,600,600);
+            let skyBox = new THREE.Mesh(skyBoxGeo, materialArray);
+            return skyBox;
         }
 
         window.showRiddleMenu = showRiddleMenu;
