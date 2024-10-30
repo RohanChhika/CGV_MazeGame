@@ -11,19 +11,20 @@
             margin: 0;
             padding: 0;
             font-family: 'Raleway', sans-serif;
-            background-color: #f4e9d7; /* Light beige background */
-            color: #5d4037; /* Dark brown text */
+            background-color: #f4e9d7;
+            color: #5d4037;
             height: 100vh;
-            overflow: hidden;
-        }
-        .container {
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
+            overflow: auto;
             background: url('https://images.unsplash.com/photo-1516541196182-6bdb0516ed27?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80') no-repeat center center;
             background-size: cover;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start; /* Align items to the top */
+            align-items: center;
+            min-height: 100vh; /* Ensures it takes at least the full height */
         }
         .content {
             text-align: center;
@@ -33,6 +34,7 @@
             border: 2px solid #8d6e63; /* Medium brown border */
             box-shadow: 0 0 20px rgba(141, 110, 99, 0.5); /* Soft brown shadow */
             border-radius: 10px;
+            margin-bottom: 20px; /* Space between content and leaderboard */
         }
         h1 {
             font-family: 'Playfair Display', serif;
@@ -72,6 +74,49 @@
         #easy { background-color: #81c784; } /* Light green */
         #medium { background-color: #fff176; } /* Light yellow */
         #hard { background-color: #e57373; } /* Light red */
+
+            #leaderboard {
+                background: rgba(244, 233, 215, 0.9);
+                padding: 1rem;
+                border: 2px solid #8d6e63;
+                box-shadow: 0 4px 10px rgba(141, 110, 99, 0.5);
+                border-radius: 10px;
+                width: 100%; /* Make leaderboard full width */
+            }
+
+            table {
+                width: 100%;
+                margin-top: 1rem;
+                border-collapse: collapse;
+            }
+
+            th, td {
+                border: 1px solid #8d6e63;
+                padding: 0.8rem; /* Increased padding for better spacing */
+                text-align: center;
+            }
+
+            th {
+                background-color: #d7ccc8; /* Light brown for headers */
+            }
+                    /* Control Instructions Styles */
+        /* Controls Styles */
+        #controls {
+            background: rgba(244, 233, 215, 0.9);
+            padding: 1rem;
+            border: 2px solid #8d6e63;
+            box-shadow: 0 4px 10px rgba(141, 110, 99, 0.5);
+            border-radius: 10px;
+            position: fixed; /* Fix position to the top right */
+            top: 20px; /* Distance from the top */
+            right: 20px; /* Distance from the right */
+            max-width: 300px; /* Set a maximum width */
+            z-index: 10; /* Ensure it appears above other elements */
+        }
+
+        #controls h2 {
+            margin-top: 0;
+        }
     </style>
 </head>
 <body>
@@ -91,6 +136,29 @@
                 <button id="hard" class="button">Master's Labyrinth</button>
             </div>
         </div>
+
+                <!-- Control Instructions Section -->
+        <div id="controls" class="content">
+                <h2>Controls</h2>
+                <p><strong>W:</strong> Move Forward</p>
+                <p><strong>A:</strong> Turn Left</p>
+                <p><strong>S:</strong> Move Backward</p>
+                <p><strong>D:</strong> Turn Right</p>
+                <p><strong>E:</strong> Interact with vendors</p>
+                <p><strong>Backspace:</strong> Pause</p>
+                <p><strong>Spacebar:</strong> Jump</p>
+                <p><strong>1:</strong> First Person View</p>
+                <p><strong>3:</strong> Third Person View</p>
+        </div>
+        </div>
+
+        <!-- Leaderboard Section -->
+        <div id="leaderboard" class="content">
+            <h2>Leaderboard</h2>
+            <div id="leaderboardBody">
+                <!-- Leaderboard entries will go here -->
+            </div>
+        </div>
     </div>
 
     <script>
@@ -102,6 +170,41 @@
             localStorage.setItem('selectedMazeLevel', mazeLevel);
             window.location.href = 'game.html';
         }
+
+        function displayLeaderboard() {
+            // Display leaderboard for all maze levels
+            const mazeLevels = ['mazeOne', 'mazeTwo', 'mazeThree'];
+            const leaderboardBody = document.getElementById('leaderboardBody');
+            leaderboardBody.innerHTML = ''; // Clear any existing content
+
+            mazeLevels.forEach(mazeLevel => {
+                const leaderboardKey = `leaderboard${mazeLevel.charAt(0).toUpperCase() + mazeLevel.slice(1)}`;
+                const leaderboard = JSON.parse(localStorage.getItem(leaderboardKey)) || [];
+
+                const mazeHeader = document.createElement('h3');
+                mazeHeader.textContent = `${mazeLevel.replace('maze', 'Maze ')} Leaderboard`;
+                leaderboardBody.appendChild(mazeHeader);
+
+                const table = document.createElement('table');
+                const headerRow = document.createElement('tr');
+                headerRow.innerHTML = '<th>Rank</th><th>Name</th><th>Time (seconds)</th>';
+                table.appendChild(headerRow);
+
+                leaderboard.forEach((entry, index) => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `<td>${index + 1}</td><td>${entry.name}</td><td>${entry.time}</td>`;
+                    table.appendChild(row);
+                });
+
+                leaderboardBody.appendChild(table);
+            });
+        }
+        // Call this function when the page loads
+        window.onload = displayLeaderboard;
+
+
+        // Call displayLeaderboard on page load
+        window.onload = displayLeaderboard;
     </script>
 </body>
 </html>

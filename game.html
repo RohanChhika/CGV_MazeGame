@@ -98,7 +98,7 @@
     <body>
         <div id="info">
             Health: <span id="health">100</span><br>
-    
+            Time: <span id="time">0</span><br>
             <!-- Vendor and Coins -->
             Coins: <span id="coins">0</span><br>
             Press 1 for First Person View, 3 for Third Person View<br>
@@ -135,6 +135,20 @@
             <button onclick="closePowerUpMenu()">Close</button>
         </div>
         <div id="healthOverlay" class="overlay"></div>
+
+        <div id="nameInputModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); color: white; z-index: 1000;">
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0,0,0,0.9); padding: 20px; border-radius: 10px; text-align: center;">
+                <h2>Well Done!</h2>
+                <p>You completed the maze!</p>
+                <label for="playerName">Please enter your name:</label>
+                <input type="text" id="playerName" style="margin: 10px 0; padding: 10px; border-radius: 5px; border: none; width: 80%;"/>
+                <div>
+                    <button id="submitName" style="padding: 10px 15px; background-color: #81c784; border: none; border-radius: 5px; cursor: pointer;">Submit</button>
+                    <button id="closeModal" style="padding: 10px 15px; background-color: #e57373; border: none; border-radius: 5px; cursor: pointer;">Cancel</button>
+                </div>
+            </div>
+        </div>
+
         <script type="importmap">
             {
                 "imports": {
@@ -171,6 +185,7 @@
             const VENDOR_INTERACTION_DISTANCE = 5;
             const gravity = -0.1;  // Gravity strength (negative pulls character down)
             const vendors = [];
+            let actions = {};
             let animationFrameId;
             // Variables
             let scene, camera, renderer, controls, ground, character, mixer, vendor;
@@ -215,6 +230,10 @@
             const direction = new THREE.Vector3();
             const clock = new THREE.Clock();
             let prevTime = performance.now();
+                    // Timer variables
+            let startTime, elapsedTime,endTime = 0;
+            let timerRunning = false;
+
 
             // Gameplay elements
             const coinObjects = [];  // Store coin objects
@@ -394,6 +413,17 @@
                 answer: "footsteps"
             }
         ];
+        function startTimer() {
+            startTime = Date.now();  // Save the start time
+            timerRunning = true;     // Mark timer as running
+        }
+
+        // Stop timer function (optional if you want to stop at maze completion)
+        function stopTimer() {
+            endTime = Date.now();
+            elapsedTime = Math.floor((endTime - startTime) / 1000);
+            timerRunning = false;
+        }
 
         function setupScene() {
             scene = new THREE.Scene();
@@ -738,18 +768,20 @@ const endLight = new THREE.SpotLight(0xffffff, 0.5);
                 'player2.glb',
                 function (gltf) {
                     character = gltf.scene;
-                    character.traverse((node)=>{
-                        if (node.isMesh){
-                            node.castShadow=true;   
+                    character.traverse((node) => {
+                        if (node.isMesh) {
+                            node.castShadow = true;
                         }
-                    })
+                    });
                     character.position.copy(characterBody.position);
                     scene.add(character);
-                    characterBody.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), Math.PI);  // Rotate by 180 degrees
-                    character.scale.set(1, 1, 1); // Adjust these values as needed
-                    character.castShadow=true;
+                    characterBody.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), Math.PI); 
+                    character.scale.set(1, 1, 1);
+                    character.castShadow = true;
+
+
                     setupControls();
-                    animate(); // Start animation loop after controls are set up
+                    animate(); // Start animation loop
                 },
                 function (xhr) {
                     console.log((xhr.loaded / xhr.total * 100) + '% loaded');
@@ -759,6 +791,7 @@ const endLight = new THREE.SpotLight(0xffffff, 0.5);
                 }
             );
         }
+
         function setupControls() {
             controls = new PointerLockControls(camera, document.body);
             scene.add(controls.getObject());
@@ -774,42 +807,42 @@ const endLight = new THREE.SpotLight(0xffffff, 0.5);
         }
 
         function updateCharacterMovement(delta) {
-    const moveSpeed = superSpeedActive ? MOVEMENT_SPEED * 2 : MOVEMENT_SPEED;
-    const velocity = new CANNON.Vec3();
+            const moveSpeed = superSpeedActive ? MOVEMENT_SPEED * 2 : MOVEMENT_SPEED;
+            const velocity = new CANNON.Vec3();
 
-    let forward = 0, right = 0;
-    if (moveForward) forward += 1;
-    if (moveBackward) forward -= 1;
-    if (moveLeft) right -= 1;
-    if (moveRight) right += 1;
+            let forward = 0, right = 0;
+            if (moveForward) forward += 1;
+            if (moveBackward) forward -= 1;
+            if (moveLeft) right -= 1;
+            if (moveRight) right += 1;
 
-    // Get character's forward and right direction
-    const cameraDirection = new THREE.Vector3();
-    camera.getWorldDirection(cameraDirection);
-    cameraDirection.y = 0;
-    cameraDirection.normalize();
-    const sideways = new THREE.Vector3(-cameraDirection.z, 0, cameraDirection.x);
+            // Get character's forward and right direction
+            const cameraDirection = new THREE.Vector3();
+            camera.getWorldDirection(cameraDirection);
+            cameraDirection.y = 0;
+            cameraDirection.normalize();
+            const sideways = new THREE.Vector3(-cameraDirection.z, 0, cameraDirection.x);
 
-    // Apply velocity based on the movement directions
-    velocity.x = (forward * cameraDirection.x + right * sideways.x) * moveSpeed;
-    velocity.z = (forward * cameraDirection.z + right * sideways.z) * moveSpeed;
+            // Apply velocity based on the movement directions
+            velocity.x = (forward * cameraDirection.x + right * sideways.x) * moveSpeed;
+            velocity.z = (forward * cameraDirection.z + right * sideways.z) * moveSpeed;
 
-    // Update the physics engine
-    characterBody.velocity.x = velocity.x;
-    characterBody.velocity.z = velocity.z;
+            // Update the physics engine
+            characterBody.velocity.x = velocity.x;
+            characterBody.velocity.z = velocity.z;
 
-    // Rotate character to face movement direction
-    if (velocity.x !== 0 || velocity.z !== 0) {
-        const angle = Math.atan2(velocity.x, velocity.z);
-        characterBody.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), angle);
-    }
-}
+            // Rotate character to face movement direction
+            if (velocity.x !== 0 || velocity.z !== 0) {
+                const angle = Math.atan2(velocity.x, velocity.z);
+                characterBody.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), angle);
+            }
+        }
 
 
 
 
         function onKeyDown(event) {
-            if (event.code === 'KeyP') {
+            if (event.code === 'Backspace') {
             togglePause();
             return;
             }
@@ -1023,6 +1056,16 @@ function animate() {
     if (mixers.length > 0) {
         mixers.forEach(mixer => mixer.update(delta));
     }
+    if (timerRunning) {
+        elapsedTime = Math.floor((Date.now() - startTime) / 1000);
+
+        // Calculate minutes and seconds
+        const minutes = Math.floor(elapsedTime / 60);
+        const seconds = elapsedTime % 60;
+
+        // Display the formatted time
+        document.getElementById("time").textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+    }
 
     renderer.render(scene, camera);
 }
@@ -1123,7 +1166,7 @@ function animate() {
                 createPhysicsMaze(mazeOne)
                 createMaze(mazeOne);
                 createTraps(mazeOne);
-
+                startTimer();
                 goalX = 29;
                 goalZ = 49;
             }else if(mazeLevel==mazeTwo){
@@ -1134,7 +1177,7 @@ function animate() {
                 createPhysicsMaze(mazeTwo)
                 createMaze(mazeTwo);
                 createTraps(mazeTwo);
-
+                startTimer();
                 goalX = 37;
                 goalZ = 65;
             }else{
@@ -1145,7 +1188,7 @@ function animate() {
                 createPhysicsMaze(mazeThree)
                 createMaze(mazeThree);
                 createTraps(mazeThree);
-
+                startTimer();
                 goalX = 45;
                 goalZ = 89;
             }
@@ -1194,7 +1237,6 @@ function animate() {
         function createMaze(mazeArray) {
             let wallMaterial;
             if (mazeArray == mazeOne){
-                console.log('poes');
                 wallMaterial = new THREE.MeshStandardMaterial({ 
                     map: mazeOneWall
                     // map: mazeOneWallBC,
@@ -1205,10 +1247,8 @@ function animate() {
                     // displacementScale: 0.1
                 });
             } else if (mazeArray == mazeTwo){
-                console.log('poes2');
                 wallMaterial = new THREE.MeshStandardMaterial({ map: mazeTwoWall});
             } else {
-                console.log('poes3');
                 wallMaterial = new THREE.MeshStandardMaterial({ map: mazeThreeWall});
             }
             mazeArray.forEach(wall => {
@@ -1243,44 +1283,41 @@ function animate() {
                 vendorPositions = [
                     { x: 5, z: 5 },  // Positions for Maze One
                     { x: 35, z: 38 },
-                    { x: 2, z: 45},
+                    { x: 2, z: 45 },
                     { x: 26, z: 2 },
                 ];
             } else if (mazeNumber === mazeTwo) {
                 vendorPositions = [
-                     { x: 11, z: 20 }, { x: 27, z: 30 }, {x:3, z:63}, { x:35, z:2},   // Positions for Maze Two
+                    { x: 11, z: 20 }, { x: 27, z: 30 }, { x: 3, z: 63 }, { x: 35, z: 2 }, // Positions for Maze Two
                     { x: 42, z: 50 }
                 ];
             } else {
                 vendorPositions = [
-                    { x: 3, z: 3 },       
-                    { x: 75, z: 3 },   
-                    { x: 3, z: 86 },      
-                    { x: 83, z: 86 },     
-                    { x: 51, z: 50 }, 
-                    {x: 3, z:35},
-                    {x: 27, z:39}
-    
+                    { x: 3, z: 3 },
+                    { x: 75, z: 3 },
+                    { x: 3, z: 86 },
+                    { x: 83, z: 86 },
+                    { x: 51, z: 50 },
+                    { x: 3, z: 35 },
+                    { x: 27, z: 39 }
                 ];
             }
 
-            // Clear any existing vendors before adding new ones for the current maze
-            vendors.forEach(vendor => {
-                scene.remove(vendor);
-            });
+            vendors.forEach(vendor => scene.remove(vendor));
             vendors.length = 0;
 
-            // Load vendors for the specified maze
             vendorPositions.forEach(position => {
                 const loader = new GLTFLoader();
                 loader.load(
                     'vendor.glb',
                     (gltf) => {
                         const vendor = gltf.scene;
-                        vendor.position.set(position.x, 0, position.z); // Set the vendor's position
+                        vendor.position.set(position.x, 0, position.z);
                         vendor.scale.set(1, 1, 1);
                         scene.add(vendor);
                         vendors.push(vendor);
+
+                        addLightBeam(position);
 
                         console.log(`Vendor added at x: ${position.x}, z: ${position.z}`);
                     },
@@ -1294,55 +1331,36 @@ function animate() {
             });
         }
 
+        function addLightBeam(position) {
+            const vendorHeight = 2.5;
+            const lightStartY = vendorHeight + 0.1;
 
-        // function createCoins(mazeNumber) {
-        //     let coinPositions;
+            const spotlight = new THREE.SpotLight(0xffffff, 1, 0, Math.PI / 4, 1);
+            spotlight.position.set(position.x, lightStartY, position.z);
+            spotlight.target.position.set(position.x, lightStartY + 100, position.z);
+            spotlight.castShadow = true;
+            scene.add(spotlight);
+            scene.add(spotlight.target);
 
-        //     // Use an if statement to check the current maze and assign coin positions accordingly
-        //     if (mazeNumber === mazeOne) {
-        //         coinPositions = [
-        //             { x: 5, z: 12 }, { x: 12, z: 5}, {x: 12, z: 45}, { x: 30, z: 30 }, { x: 45, z: 45 },  // Positions for Maze One
-        //             { x: 20, z: 20 }, { x: 45, z: 5 }
-        //         ];
-        //     } else if (mazeNumber === mazeTwo) {
-        //         coinPositions = [
-        //             { x: 35, z: 30 }, { x:15, z:60}, {x:20, z:30}, {x:4, z:15}, {x:45, z:13}, {x:47, z:30}, // Positions for Maze Two
-        //             { x: 45, z: 45 }, { x: 60, z: 63 }
-        //         ];
-        //     } else {
-        //         coinPositions = [
-        //             { x: 12, z: 13 },
-        //             {x: 12, z: 50 },
-        //             {x: 17, z: 85 },
-        //             {x: 49, z: 28 },
-        //             {x: 49, z: 36 },
-        //             {x: 70, z: 50 },
-        //             {x: 70, z: 60 }
-        //         ];
-        //     }
+            const beamHeight = 100;
+            const beamGeometry = new THREE.CylinderGeometry(0.5, 0.5, beamHeight, 32, 1, true);
+            const beamMaterial = new THREE.MeshBasicMaterial({
+                color: 0xb3b3ff,
+                transparent: true,
+                opacity: 0.3,
+                side: THREE.DoubleSide
+            });
 
-        //     // Clear any existing coins before adding new ones for the current maze
-        //     coinObjects.forEach(coin => {
-        //         scene.remove(coin);
-        //     });
-        //     coinObjects.length = 0; // Reset the coin array
+            const beam = new THREE.Mesh(beamGeometry, beamMaterial);
+            beam.position.set(position.x, lightStartY + beamHeight / 2, position.z);
+            scene.add(beam);
+            beams.push(beam);
+        }
 
-        //     // Load coins for the specified maze
-        //     coinPositions.forEach(position => {
-        //         const coinGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.1, 32);
-        //         const coinMaterial = new THREE.MeshStandardMaterial({ color: 0xffd700 });
-        //         const coin = new THREE.Mesh(coinGeometry, coinMaterial);
-        //         coin.rotation.x = Math.PI / 2;  // Rotate the coin flat
-        //         coin.position.set(position.x, 0.5, position.z);  // Set coin position
-        //         scene.add(coin);
-        //         coinObjects.push(coin);
-        //     });
-        // }
 
         function createCoins(mazeNumber) {
             let coinPositions;
 
-            // Assign coin positions based on the current maze
             if (mazeNumber === mazeOne) {
                 coinPositions = [
                     { x: 5, z: 12 }, { x: 12, z: 5 }, { x: 12, z: 45 },
@@ -1363,42 +1381,35 @@ function animate() {
                 ];
             }
 
-            // Clear existing coins
             coinObjects.forEach(coin => scene.remove(coin));
             coinObjects.length = 0;
 
-            // Create glowing and reflective coins
             coinPositions.forEach(position => {
                 const coinGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.1, 32);
 
-                // Use MeshPhysicalMaterial for reflection and metallic effects
                 const coinMaterial = new THREE.MeshPhysicalMaterial({
-                    color: 0xffd700, // Gold color
-                    metalness: 1.0,  // Full metallic effect
-                    roughness: 0.2,  // Slight roughness for realistic reflection
-                    emissive: 0xffd700, // Glow effect color
-                    emissiveIntensity: 0.8, // Glow intensity
-                    clearcoat: 1.0, // Adds reflective clearcoat on top
-                    clearcoatRoughness: 0.1 // Smooth clearcoat
+                    color: 0xffd700,
+                    metalness: 1.0,
+                    roughness: 0.2,
+                    emissive: 0xffd700,
+                    emissiveIntensity: 0.8,
+                    clearcoat: 1.0,
+                    clearcoatRoughness: 0.1
                 });
 
                 const coin = new THREE.Mesh(coinGeometry, coinMaterial);
-                coin.rotation.x = Math.PI / 2; // Rotate flat
-                coin.position.set(position.x, 0.5, position.z); // Set position
+                coin.rotation.x = Math.PI / 2;
+                coin.position.set(position.x, 0.5, position.z);
 
                 // Add a small point light to simulate the glow
                 const glowLight = new THREE.PointLight(0xffd700, 0.5, 3); // Color, intensity, range
                 glowLight.position.set(position.x, 0.5, position.z);
-                scene.add(glowLight); // Add light to the scene
+                scene.add(glowLight);
 
-                scene.add(coin); // Add coin to the scene
-                coinObjects.push(coin); // Store reference to the coin
+                scene.add(coin);
+                coinObjects.push(coin);
             });
         }
-
-
-
-
         function checkForCoins() {
             if (!character) return;
 
@@ -1446,24 +1457,24 @@ function animate() {
         }
 
         
-        // Create a timer display element
         const timerElement = document.createElement('div');
         timerElement.style.position = 'absolute';
-        timerElement.style.top = '10px';
+        timerElement.style.top = '10%';
         timerElement.style.left = '50%';
-        timerElement.style.transform = 'translate(-50%, -50%)'; // Center it
-        timerElement.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-        timerElement.style.color = 'white';
+        timerElement.style.transform = 'translate(-50%, -50%)';
+        timerElement.style.backgroundColor = 'red';
+        timerElement.style.color = 'black';
         timerElement.style.padding = '10px';
         timerElement.style.borderRadius = '5px';
         timerElement.style.fontSize = '18px';
+        timerElement.style.fontWeight = 'bold';
+
         timerElement.style.display = 'none'; // Hide initially
         document.body.appendChild(timerElement);
 
         function startCountdown(duration, message) {
             let remainingTime = duration;
 
-            // Display the timer
             timerElement.style.display = 'block';
 
             const interval = setInterval(() => {
@@ -1472,7 +1483,7 @@ function animate() {
 
                 if (remainingTime <= 0) {
                     clearInterval(interval);
-                    timerElement.style.display = 'none'; // Hide timer when finished
+                    timerElement.style.display = 'none';
                 }
             }, 1000);
         }
@@ -1482,14 +1493,12 @@ function animate() {
                 coins -= 10;
                 superSpeedActive = true;
                 coinsElement.textContent = coins;
-                alert("Super Speed purchased for 20 Seconds!");
 
                 closePowerUpMenu();
-                startCountdown(20, 'Super Speed'); // Start the countdown
+                startCountdown(20, 'Super Speed');
 
                 setTimeout(() => {
                     superSpeedActive = false;
-                    alert("Super Speed has expired.");
                 }, 20000);
             } 
             else if (powerUp === 'healthBoost' && coins >= 15) {
@@ -1497,7 +1506,6 @@ function animate() {
                 health = Math.min(100, health + 20);
                 healthElement.textContent = health;
                 coinsElement.textContent = coins;
-                alert("Health Boost purchased!");
 
                 closePowerUpMenu();
             } 
@@ -1505,14 +1513,12 @@ function animate() {
                 coins -= 10;
                 coinsElement.textContent = coins;
                 invincible = true;
-                alert("Invincibility purchased for 20 seconds!");
 
                 closePowerUpMenu();
-                startCountdown(20, 'Invincibility'); // Start the countdown
+                startCountdown(20, 'Invincibility');
 
                 setTimeout(() => {
                     invincible = false;
-                    alert("Invincibility has expired.");
                 }, 20000);
             } 
             else if (powerUp === 'superJump' && coins >= 20) {
@@ -1520,77 +1526,17 @@ function animate() {
                 coinsElement.textContent = coins;
                 jumpStrength = 30;
 
-                alert("Super Jump purchased for 10 Seconds!");
                 closePowerUpMenu();
-                startCountdown(10, 'Super Jump'); // Start the countdown
+                startCountdown(10, 'Super Jump');
 
                 setTimeout(() => {
                     jumpStrength = 6;
-                    alert("Super Jump has expired.");
                 }, 10000);
             } 
             else {
                 alert("Not enough coins!");
             }
         };
-
-
-        // window.buyPowerUp = function(powerUp) {
-        //     if (powerUp === 'superSpeed' && coins >= 10) {
-        //         coins -= 10;
-        //         superSpeedActive = true;
-        //         coinsElement.textContent = coins;
-        //         alert("Super Speed purchased for 20 Seconds!");
-
-        //         closePowerUpMenu();
-
-        //         setTimeout(() => {
-        //             superSpeedActive = false;
-        //             alert("Super Speed has expired.");
-        //         }, 20000);
-        //     } 
-        //     else if (powerUp === 'healthBoost' && coins >= 15) {
-        //         coins -= 15;
-        //         health = Math.min(100, health + 20);
-        //         healthElement.textContent = health;
-        //         coinsElement.textContent = coins;
-        //         alert("Health Boost purchased!");
-
-        //         closePowerUpMenu();
-        //     }
-        //     else if(powerUp === 'Invincibility' && coins >= 10){
-        //         coins -= 10;
-        //         coinsElement.textContent = coins;
-        
-        //         invincible = true;
-        //         alert("Invincibility purchased for 20 seconds!");
-        //         closePowerUpMenu();
-
-        //         setTimeout(() => {
-        //             invincible = false;  
-        //             alert("Invincibility has expired.");
-        //         }, 20000);
-        //     }
-        //     else if(powerUp === 'superJump' && coins >= 20){
-        //         coins -= 20;
-        //         coinsElement.textContent = coins;
-        //         jumpStrength = 30;
-
-
-        //         alert("Super Jump purchased for 10 Seconds!");
-        //         closePowerUpMenu();
-
-
-        //         setTimeout(() => {
-        //             jumpStrength = 6;
-        //             alert("Super Jump has expired.");
-        //         }, 10000);
-        //     } 
-        //     else {
-        //         alert("Not enough coins!");
-        //     }
-        // };
-
         function openVendorMenu() {
             vendorMenu.style.display = 'block';
             controls.unlock();
@@ -1649,6 +1595,7 @@ function animate() {
             }
             if ((characterBody.position.x > goalX - 3) && (characterBody.position.x < goalX + 3) &&
                 (characterBody.position.z > goalZ - 3) && (characterBody.position.z < goalZ + 3)){
+                    stopTimer();
                     endGame('complete');
             }
             console.log(characterBody.position.x);
@@ -1662,8 +1609,59 @@ function animate() {
             document.getElementById('gameOverScreen').style.display = 'block';
         } else if (status === 'complete') {
             document.getElementById('wellDoneScreen').style.display = 'block';
-        }
+
+                // Show the custom modal
+            document.getElementById('nameInputModal').style.display = 'block';
+
+                // Handle the submit button click
+            document.getElementById('submitName').onclick = function() {
+            const playerName = document.getElementById('playerName').value.trim();
+            if (playerName) {
+             // Add score to the leaderboard
+                addScoreToLeaderboard(playerName, elapsedTime);
+                document.getElementById('nameInputModal').style.display = 'none'; // Close the modal
+                } else {
+                alert("Please enter a valid name!"); // Simple validation
+                }
+            };
+                document.getElementById('closeModal').onclick = function() {
+                    document.getElementById('nameInputModal').style.display = 'none'; // Close the modal without saving
+                };
+            }
     }
+    function addScoreToLeaderboard(name, time) {
+            const selectedMazeLevel = localStorage.getItem('selectedMazeLevel'); // Retrieve the selected maze level from local storage
+
+            // Determine which leaderboard to update based on the selected maze level
+            let leaderboardKey;
+            if (selectedMazeLevel === 'mazeOne') {
+                leaderboardKey = 'leaderboardMazeOne';
+            } else if (selectedMazeLevel === 'mazeTwo') {
+                leaderboardKey = 'leaderboardMazeTwo';
+            } else if (selectedMazeLevel === 'mazeThree') {
+                leaderboardKey = 'leaderboardMazeThree';
+            }    
+
+            // Retrieve existing leaderboard from local storage or initialize it
+            let leaderboard = JSON.parse(localStorage.getItem(leaderboardKey)) || [];
+
+            // Add the new score
+            leaderboard.push({ name: name, time: time });
+
+            // Sort the leaderboard by time (ascending)
+            leaderboard.sort((a, b) => a.time - b.time);
+
+            // Optional: Limit to top 10 scores
+            if (leaderboard.length > 10) {
+                leaderboard.pop(); // Remove the last entry if there are more than 10 scores
+            }
+
+            // Save the updated leaderboard back to local storage
+            localStorage.setItem(leaderboardKey, JSON.stringify(leaderboard));
+
+            // Optional: Redirect back to the main page or refresh the leaderboard
+            window.location.href = 'index.html'; // Change to your main page if needed
+        }
 
         function applyGravity() {
             if (!isGrounded) {
