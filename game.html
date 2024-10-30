@@ -169,6 +169,7 @@
         <button id="backToMenu">Back to Menu</button>
         <script type="module">
             let isPaused = false;
+            let isInteracting = false;
             const pauseMenu = document.createElement('div');
             import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.module.js';
             import { PointerLockControls } from 'https://cdn.jsdelivr.net/npm/three@0.157.0/examples/jsm/controls/PointerLockControls.js';
@@ -202,6 +203,7 @@
             let cameraOffset = new THREE.Vector3();
 
             const traps = [];
+            const pendulums = [];
             let lastDamageTime = 0;
             const damageCooldown = 1000; // 1 second cooldown between damage applications
             const ANIMATION_DURATION = 110; // Total frames of the animation
@@ -570,6 +572,85 @@ const endLight = new THREE.SpotLight(0xffffff, 0.5);
             world.addBody(groundBody);
 
         }
+        function createPendulum() {
+            // Reduced ball size (from 1 to 0.5)
+            const rodGeometry = new THREE.CylinderGeometry(0.05, 0.05, 3, 32);
+            const ballGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+            
+            const rodMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x2c2c2c,
+                metalness: 0.7,
+                roughness: 0.3
+            });
+            const ballMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x1a1a1a,
+                metalness: 0.8,
+                roughness: 0.2
+            });
+
+            const rod = new THREE.Mesh(rodGeometry, rodMaterial);
+            rod.position.y = -2; // Center the rod at the pivot point
+
+            const ball = new THREE.Mesh(ballGeometry, ballMaterial);
+            ball.position.y = -3.5; // Position at the bottom of the rod
+
+            const pendulum = new THREE.Group();
+            pendulum.add(rod);
+
+            const spikeGeometry = new THREE.ConeGeometry(0.1, 0.25, 8); // Reduced spike size to match smaller ball
+            const spikeMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0x303030,
+                shininess: 80,
+                specular: 0x444444 
+            });
+            const numSpikes = 50;
+            
+            for (let i = 0; i < numSpikes; i++) {
+                const spike = new THREE.Mesh(spikeGeometry, spikeMaterial);
+                
+                // Calculate point on sphere using fibonacci distribution
+                const y = 1 - (i / (numSpikes - 1)) * 2;
+                const radius = Math.sqrt(1 - y * y);
+                const theta = ((Math.PI * (3 - Math.sqrt(5))) * i) % (2 * Math.PI);
+                const x = Math.cos(theta) * radius;
+                const z = Math.sin(theta) * radius;
+                
+                // Position spike (reduced multiplier from 1.2 to 0.6 to match smaller ball)
+                spike.position.set(x * 0.6, y * 0.6, z * 0.6);
+                
+                // Calculate normal vector (direction from center to point on sphere)
+                const normal = new THREE.Vector3(x, y, z).normalize();
+                
+                // Create orientation matrix
+                const matrix = new THREE.Matrix4();
+                const up = new THREE.Vector3(0, 1, 0);
+                const axis = new THREE.Vector3();
+                axis.crossVectors(up, normal).normalize();
+                const angle = Math.acos(up.dot(normal));
+                matrix.makeRotationAxis(axis, angle);
+                
+                // Apply orientation
+                spike.quaternion.setFromRotationMatrix(matrix);
+                
+                ball.add(spike);
+            }
+
+            pendulum.add(ball);
+            scene.add(pendulum);
+
+            return {
+                model: pendulum,
+                ball: ball
+            };
+        }
+
+        function animatePendulum(pendulum) {
+            const time = Date.now() * 0.002;
+            const maxAngle = Math.PI / 4;
+            pendulum.rotation.z = maxAngle * Math.sin(time);
+        }
+
+
         function createTraps(mazeNumber) {
             let trapPositions;
 
@@ -755,6 +836,79 @@ const endLight = new THREE.SpotLight(0xffffff, 0.5);
                 );
             });
         }
+        function createPendulums(mazeNumber) {
+            let pendulumPositions;
+
+            if (mazeNumber === mazeOne) {
+                pendulumPositions = [
+                    { x: 13, z: 11, swingAxis: 'z' },
+                    { x: 26, z: 13, swingAxis: 'x' },
+                    { x: 34, z: 21, swingAxis: 'x' }
+                ];
+            } else if (mazeNumber === mazeTwo) {
+                pendulumPositions = [
+                    { x: 34, z: 29, swingAxis: 'x' },
+                    { x: 14, z: 61, swingAxis: 'x' },
+                    { x: 5, z: 14, swingAxis: 'z' },
+                    { x: 44, z: 13, swingAxis: 'x' },
+                    { x: 60, z: 61, swingAxis: 'x' }                
+                ];
+            } else {
+                pendulumPositions = [
+                    { x: 13, z: 13, swingAxis: 'x' },
+                    { x: 13, z: 51, swingAxis: 'z' },
+                    { x: 16, z: 85, swingAxis: 'x' },
+                    { x: 48, z: 29, swingAxis: 'x' },
+                    { x: 48, z: 37, swingAxis: 'x' },
+                    { x: 69, z: 49, swingAxis: 'z' }                    
+                ];
+            }
+
+            pendulums.forEach(pendulum => {
+                scene.remove(pendulum.model);
+            });
+            pendulums.length = 0;
+
+            pendulumPositions.forEach(position => {
+                const { model: pendulum, ball } = createPendulum();
+                pendulum.position.set(position.x, 6, position.z);
+                
+                pendulums.push({
+                    model: pendulum,
+                    ball: ball,
+                    swingAxis: position.swingAxis,
+                    angle: 0,
+                    speed: 0.03,
+                    maxAngle: Math.PI / 4
+                });
+            });
+        }
+
+        function checkPendulumCollisions() {
+            const now = Date.now();
+            pendulums.forEach(pendulum => {
+                pendulum.model.updateMatrixWorld();
+                const ballWorldPosition = new THREE.Vector3();
+                pendulum.ball.getWorldPosition(ballWorldPosition);
+
+                // Get the character's position
+                const characterPosition = character.position;
+
+                const distanceXZ = Math.sqrt(
+                    Math.pow(characterPosition.x - ballWorldPosition.x, 2) +
+                    Math.pow(characterPosition.z - ballWorldPosition.z, 2)
+                );
+
+                const collisionThreshold = characterRadius + 0.5;
+
+                if (distanceXZ < collisionThreshold && now - lastDamageTime > damageCooldown) {
+                    console.log("Collision with pendulum!");
+                    applyDamage(10);
+                    lastDamageTime = now;
+                }
+            });
+        }
+
 
         characterBody.addEventListener("collide", function(e) {
             // Collision detected, you can handle the collision here
@@ -1022,6 +1176,24 @@ function animate() {
             trap.previousState = trap.isSpikesUp;
         }
     });
+    
+    function updatePendulums(deltaTime) {
+                pendulums.forEach(pendulum => {
+                    pendulum.angle += pendulum.speed;
+                    if (Math.abs(pendulum.angle) >= pendulum.maxAngle) {
+                        pendulum.speed *= -1; // Reverse direction at max angle
+                    }
+                    
+                    if (pendulum.swingAxis === 'x') {
+                        pendulum.model.rotation.x = pendulum.angle;
+                    } else {
+                        pendulum.model.rotation.z = pendulum.angle;
+                    }
+                });
+            }
+
+            updatePendulums(delta);
+
             // Sync the Three.js character position with the Cannon.js physics body
         if (controls && controls.isLocked) {
         updateCharacterMovement(delta);
@@ -1033,6 +1205,7 @@ function animate() {
         }
         applyOverlay();
         checkTrapCollisions();
+        checkPendulumCollisions();
         checkForCoins();
         checkGameStatus(mazeLevel);
         applyGravity();
@@ -1166,6 +1339,7 @@ function animate() {
                 createPhysicsMaze(mazeOne)
                 createMaze(mazeOne);
                 createTraps(mazeOne);
+                createPendulums(mazeOne);
                 startTimer();
                 goalX = 29;
                 goalZ = 49;
@@ -1177,6 +1351,7 @@ function animate() {
                 createPhysicsMaze(mazeTwo)
                 createMaze(mazeTwo);
                 createTraps(mazeTwo);
+                createPendulums(mazeTwo);
                 startTimer();
                 goalX = 37;
                 goalZ = 65;
@@ -1188,6 +1363,7 @@ function animate() {
                 createPhysicsMaze(mazeThree)
                 createMaze(mazeThree);
                 createTraps(mazeThree);
+                createPendulums(mazeThree);
                 startTimer();
                 goalX = 45;
                 goalZ = 89;
@@ -1201,28 +1377,28 @@ function animate() {
 
         // Function to create wall bodies for the maze
         function createPhysicsMaze(mazeArray) {
-    // Define the wall shape once (can be reused for each wall)
-    const wallThickness = 0.5;  // Increase thickness for better collision detection
-    const wallHeight = 3;  // Height of the wall
-    const wallMaterial = new CANNON.Material();  // Optional: Assign specific material for the walls
+            // Define the wall shape once (can be reused for each wall)
+            const wallThickness = 0.5;  // Increase thickness for better collision detection
+            const wallHeight = 3;  // Height of the wall
+            const wallMaterial = new CANNON.Material();  // Optional: Assign specific material for the walls
 
-    mazeArray.forEach(wall => {
-        // Calculate the length and angle of each wall
-        const length = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1);  // Length of the wall
-        const angle = Math.atan2(wall.y2 - wall.y1, wall.x2 - wall.x1);  // Angle of the wall in radians
+        mazeArray.forEach(wall => {
+            // Calculate the length and angle of each wall
+            const length = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1);  // Length of the wall
+            const angle = Math.atan2(wall.y2 - wall.y1, wall.x2 - wall.x1);  // Angle of the wall in radians
 
-        // Create the wall's shape and body
-        const wallShape = new CANNON.Box(new CANNON.Vec3(length / 2, wallHeight / 2, wallThickness / 2));
-        const wallBody = new CANNON.Body({
-            mass: 0,  // Static wall (mass 0 means it doesn't move)
-            shape: wallShape,
-            material: wallMaterial,  // Optional: Material for friction, etc.
-            position: new CANNON.Vec3(
-                (wall.x1 + wall.x2) / 2,  // Middle point between start and end X positions
-                wallHeight / 2,  // Set the wall's vertical position (Y-axis) based on half its height
-                (wall.y1 + wall.y2) / 2   // Middle point between start and end Z positions (Cannon uses Z instead of Y)
-            )
-        });
+            // Create the wall's shape and body
+            const wallShape = new CANNON.Box(new CANNON.Vec3(length / 2, wallHeight / 2, wallThickness / 2));
+            const wallBody = new CANNON.Body({
+                mass: 0,  // Static wall (mass 0 means it doesn't move)
+                shape: wallShape,
+                material: wallMaterial,  // Optional: Material for friction, etc.
+                position: new CANNON.Vec3(
+                    (wall.x1 + wall.x2) / 2,  // Middle point between start and end X positions
+                    wallHeight / 2,  // Set the wall's vertical position (Y-axis) based on half its height
+                    (wall.y1 + wall.y2) / 2   // Middle point between start and end Z positions (Cannon uses Z instead of Y)
+                )
+            });
 
         // Rotate the wall to match its direction in the maze
         wallBody.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), -angle);
@@ -1429,18 +1605,51 @@ function animate() {
             coinsElement.textContent = coins;
             console.log(coins);
         }
-
         function tryInteractWithVendor() {
-            if (!character || vendors.length === 0) return;
+    if (!character || vendors.length === 0) return;
 
-            vendors.forEach(vendor =>{
-                const distance = character.position.distanceTo(vendor.position);
-                if (distance <= VENDOR_INTERACTION_DISTANCE) {
-                    openVendorMenu();
-            }
-            });
-            
+    // Check proximity to vendors
+    let isNearVendor = false;
+    vendors.forEach(vendor => {
+        const distance = character.position.distanceTo(vendor.position);
+        if (distance <= VENDOR_INTERACTION_DISTANCE) {
+            isNearVendor = true; // Set flag if near vendor
         }
+    });
+
+    // If not near a vendor, reset interaction state
+    if (!isNearVendor && isInteracting) {
+        closeVendorMenu(); // Close the vendor menu if it's open
+        controls.unlock(); // Unlock controls
+        isInteracting = false; // Reset interaction state
+    }
+}
+
+// Keypress event listener for interaction
+document.addEventListener('keydown', function(event) {
+    // Check if the "E" key is pressed and the character is near a vendor
+    if (event.code === 'KeyE') {
+        let isNearVendor = true;
+        vendors.forEach(vendor => {
+            const distance = character.position.distanceTo(vendor.position);
+            if (distance <= VENDOR_INTERACTION_DISTANCE) {
+                isNearVendor = true; // Set flag if near vendor
+            }
+        });
+
+        if (isNearVendor) {
+            // Toggle interaction state
+            isInteracting = !isInteracting;
+            if (isInteracting) {
+                openVendorMenu(); // Open the vendor menu
+                controls.lock(); // Lock controls when interacting with vendor
+            } else {
+                closeVendorMenu(); // Close the vendor menu
+                controls.unlock(); // Unlock controls when done interacting
+            }
+        }
+    }
+});
 
         function checkVendorProximity() {
             if (!character || vendors.length === 0) return; // Ensure both character and vendor are loaded
