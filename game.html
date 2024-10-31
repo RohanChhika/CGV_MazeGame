@@ -93,15 +93,27 @@
                 }
             }
         </style>
+
+        <link
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+            integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" 
+            crossorigin="anonymous" 
+            referrerpolicy="no-referrer"
+        />
     </head>
 
     <body>
         <div id="info">
-            Health: <span id="health">100</span><br>
-            Time: <span id="time">0</span><br>
-            <!-- Vendor and Coins -->
-            Coins: <span id="coins">0</span><br>
-            Press 1 for First Person View, 3 for Third Person View<br>
+            <!--Coins: <span id="coins">0</span><br>-->
+            <i class="fas fa-heart" style="color: red;"></i>
+            <span id="health">100</span><br>
+            <i class="fas fa-clock"></i>
+            <span id="time">0</span>
+            <i class="fas fa-coins" style="color: gold;"></i>
+            <span id="coins">0</span><br>
+            1 = First Person<br>
+            3 = Third Person<br>
         </div>
     
         <div id = "interactionMessage">
@@ -204,6 +216,7 @@
             let cameraOffset = new THREE.Vector3();
 
             const traps = [];
+            const beams = [];
             const pendulums = [];
             let lastDamageTime = 0;
             const damageCooldown = 1000; // 1 second cooldown between damage applications
@@ -1654,33 +1667,60 @@ function animate() {
         
         const timerElement = document.createElement('div');
         timerElement.style.position = 'absolute';
-        timerElement.style.top = '10%';
-        timerElement.style.left = '50%';
-        timerElement.style.transform = 'translate(-50%, -50%)';
-        timerElement.style.backgroundColor = 'red';
-        timerElement.style.color = 'black';
+        timerElement.style.top = '15%';
+        timerElement.style.left = '1%';
+        timerElement.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        timerElement.style.color = 'white';
         timerElement.style.padding = '10px';
         timerElement.style.borderRadius = '5px';
         timerElement.style.fontSize = '18px';
         timerElement.style.fontWeight = 'bold';
-
         timerElement.style.display = 'none'; // Hide initially
+
+        // Create a label for the power-up name
+        const powerUpLabel = document.createElement('div');
+        powerUpLabel.style.textAlign = 'center';
+        timerElement.appendChild(powerUpLabel);
+
+        // Create a progress bar container
+        const progressBarContainer = document.createElement('div');
+        progressBarContainer.style.width = '100%';
+        progressBarContainer.style.backgroundColor = '#ddd';
+        progressBarContainer.style.borderRadius = '5px';
+        progressBarContainer.style.marginTop = '10px';
+        timerElement.appendChild(progressBarContainer);
+
+        // Create the progress bar itself
+        const progressBar = document.createElement('div');
+        progressBar.style.width = '100%';
+        progressBar.style.height = '20px';
+        progressBar.style.backgroundColor = 'red';
+        progressBar.style.borderRadius = '5px';
+        progressBarContainer.appendChild(progressBar);
+
         document.body.appendChild(timerElement);
 
         function startCountdown(duration, message) {
-            let remainingTime = duration;
+            const startTime = Date.now();
+            const endTime = startTime + duration * 1000; // Convert duration to milliseconds
 
             timerElement.style.display = 'block';
+            powerUpLabel.textContent = message;
 
-            const interval = setInterval(() => {
-                remainingTime -= 1;
-                timerElement.textContent = `${message}: ${remainingTime} seconds`;
+            function updateProgressBar() {
+                const now = Date.now();
+                const remainingTime = Math.max(0, endTime - now);
+                const percentage = (remainingTime / (duration * 1000)) * 100;
+                progressBar.style.width = percentage + '%';
 
                 if (remainingTime <= 0) {
-                    clearInterval(interval);
                     timerElement.style.display = 'none';
+                } else {
+                    requestAnimationFrame(updateProgressBar);
                 }
-            }, 1000);
+            }
+
+            updateProgressBar();
         }
 
         window.buyPowerUp = function (powerUp) {
